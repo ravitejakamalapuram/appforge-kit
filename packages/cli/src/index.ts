@@ -2,6 +2,7 @@
 import { Command, CommanderError } from 'commander';
 import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
+import { runSecurityPermissions } from './commands/security-permissions.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -36,6 +37,26 @@ program
       to: opts.to as ProductState,
       evidenceFile: opts.evidence,
       approved: opts.approved,
+      json: opts.json,
+    });
+  });
+
+const security = program.command('security').description('Deterministic security checks (no LLM involved)');
+
+security
+  .command('permissions')
+  .description('Diff manifest permissions against .appforge/permissions.yaml and flag newly added high-risk permissions')
+  .requiredOption('--manifest <path>', 'path to the built manifest.json')
+  .option('--permissions <path>', 'path to permissions.yaml', '.appforge/permissions.yaml')
+  .option('--security <path>', 'path to a security.yaml with a high_risk_permissions list (falls back to a built-in default list)')
+  .option('--previous-manifest <path>', 'a previous manifest.json to diff against, to detect newly added permissions (without it, every current permission is treated as new)')
+  .option('--json', 'machine-readable output', false)
+  .action((opts: { manifest: string; permissions: string; security?: string; previousManifest?: string; json: boolean }) => {
+    process.exitCode = runSecurityPermissions({
+      manifestFile: opts.manifest,
+      permissionsFile: opts.permissions,
+      securityFile: opts.security,
+      previousManifestFile: opts.previousManifest,
       json: opts.json,
     });
   });
