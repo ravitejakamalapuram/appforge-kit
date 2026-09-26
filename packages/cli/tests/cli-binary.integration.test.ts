@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,5 +39,45 @@ describe('appforge CLI binary (commander wiring, not just the exported run* func
   it('exits 2 for an unknown option instead of crashing past our exit-code contract', () => {
     const { code } = run(['product-transition', '--from', 'DISCOVERED', '--to', 'RESEARCHING', '--not-a-real-flag']);
     expect(code).toBe(2);
+  });
+});
+
+describe('appforge security permissions (nested subcommand wiring)', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-security-binary-')); });
+  afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it('exits 0 for a matching manifest and permissions.yaml with no high-risk permissions', () => {
+    const manifest = path.join(dir, 'manifest.json');
+    writeFileSync(manifest, JSON.stringify({ permissions: ['storage'] }));
+    const permissions = path.join(dir, 'permissions.yaml');
+    writeFileSync(permissions, [
+      'schema: appforge/permissions@1',
+      'permissions:',
+      '  - permission: storage',
+      '    required: true',
+      '    reason: "Persist settings locally"',
+      '    data_access: [user_content_local]',
+      '    security_impact: low',
+    ].join('\n'));
+    const { code } = run(['security', 'permissions', '--manifest', manifest, '--permissions', permissions]);
+    expect(code).toBe(0);
+  });
+
+  it('exits 6, via the real nested "security permissions" subcommand, for an undocumented permission', () => {
+    const manifest = path.join(dir, 'manifest-bad.json');
+    writeFileSync(manifest, JSON.stringify({ permissions: ['storage', 'tabs'] }));
+    const permissions = path.join(dir, 'permissions-bad.yaml');
+    writeFileSync(permissions, [
+      'schema: appforge/permissions@1',
+      'permissions:',
+      '  - permission: storage',
+      '    required: true',
+      '    reason: "Persist settings locally"',
+      '    data_access: [user_content_local]',
+      '    security_impact: low',
+    ].join('\n'));
+    const { code } = run(['security', 'permissions', '--manifest', manifest, '--permissions', permissions]);
+    expect(code).toBe(6);
   });
 });

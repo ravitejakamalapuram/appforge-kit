@@ -1,3 +1,12 @@
+/**
+ * Default high-risk permission list (§13.2/§29f of the master plan), used by
+ * `appforge security permissions` when no repo/company `security.yaml` override is given.
+ */
+export const DEFAULT_HIGH_RISK_PERMISSIONS: readonly string[] = [
+  'cookies', 'history', 'webRequest', 'webRequestBlocking', 'debugger', 'management',
+  'nativeMessaging', 'identity', 'clipboardRead', '<all_urls>', '*://*/*',
+];
+
 export interface PermissionDiffResult {
   ok: boolean;
   missingInYaml: string[];
