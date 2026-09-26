@@ -3,6 +3,7 @@ import { Command, CommanderError } from 'commander';
 import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
 import { runSecurityPermissions } from './commands/security-permissions.js';
+import { runTestE2e } from './commands/test-e2e.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -59,6 +60,22 @@ security
       previousManifestFile: opts.previousManifest,
       json: opts.json,
     });
+  });
+
+program
+  .command('test')
+  .description('Run test suites for an AppForge product (currently: --e2e, the Playwright Chrome extension harness)')
+  .option('--e2e', 'run the Playwright e2e suite', false)
+  .option('--dir <path>', 'product directory to build and test', '.')
+  .option('--dist <path>', 'a pre-built extension dist directory (skips the build step)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { e2e: boolean; dir: string; dist?: string; json: boolean }) => {
+    if (!opts.e2e) {
+      printOutput(buildOutput('test', false, undefined, ['no test type selected; pass --e2e']), opts.json);
+      process.exitCode = 2;
+      return;
+    }
+    process.exitCode = await runTestE2e({ dir: opts.dir, dist: opts.dist, json: opts.json });
   });
 
 try {

@@ -5,6 +5,7 @@
   "bin": { "appforge": "./dist/index.js" },
   "scripts": { "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js" },
   "dependencies": {
+    "@appforge/e2e": "workspace:*",
     "@appforge/router": "workspace:*",
     "@appforge/schemas": "workspace:*",
     "commander": "^12.1.0",
