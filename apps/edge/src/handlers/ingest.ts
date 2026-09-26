@@ -17,7 +17,13 @@ function validateRow(input: unknown): { product: string; date: string; name: str
   return { product: r.product, date: r.date, name: r.name, value: r.value };
 }
 
+const MIN_ADMIN_TOKEN_LENGTH = 16;
+
+// Fails closed if the configured token is missing/too short (e.g. a secret that was never set)
+// rather than comparing against `Bearer undefined` or `Bearer ` — a caller who happens to send
+// that literal string must never be treated as authorized.
 export function isAuthorized(request: Request, adminToken: string): boolean {
+  if (typeof adminToken !== 'string' || adminToken.length < MIN_ADMIN_TOKEN_LENGTH) return false;
   const header = request.headers.get('Authorization') ?? '';
   return header === `Bearer ${adminToken}`;
 }

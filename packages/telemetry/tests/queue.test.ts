@@ -82,4 +82,38 @@ describe('TelemetryQueue', () => {
     const queue = new TelemetryQueue(fakeArea(), BASE_OPTIONS);
     expect(await queue.size()).toBe(0);
   });
+
+  it('assigns distinct seqs and keeps both events when two enqueue() calls overlap (Review finding: unserialized read-modify-write)', async () => {
+    const queue = new TelemetryQueue(fakeArea(), BASE_OPTIONS);
+    const [first, second] = await Promise.all([queue.enqueue('a'), queue.enqueue('b')]);
+    expect(first.seq).not.toBe(second.seq);
+    expect(await queue.size()).toBe(2);
+  });
+
+  it('peek() returns queued events without removing them (Review finding: drain() is not retry-safe)', async () => {
+    const queue = new TelemetryQueue(fakeArea(), BASE_OPTIONS);
+    await queue.enqueue('a');
+    const peeked = await queue.peek();
+    expect(peeked.map((e) => e.event)).toEqual(['a']);
+    expect(await queue.size()).toBe(1);
+  });
+
+  it('ack() removes only events up to and including the given seq', async () => {
+    const queue = new TelemetryQueue(fakeArea(), BASE_OPTIONS);
+    await queue.enqueue('a');
+    await queue.enqueue('b');
+    await queue.enqueue('c');
+    await queue.ack(1);
+    const remaining = await queue.peek();
+    expect(remaining.map((e) => e.event)).toEqual(['c']);
+  });
+
+  it('a failed delivery after peek() (no ack()) leaves the batch queued for retry', async () => {
+    const queue = new TelemetryQueue(fakeArea(), BASE_OPTIONS);
+    await queue.enqueue('a');
+    await queue.peek(); // simulates a POST that never confirms success
+    expect(await queue.size()).toBe(1);
+    const retried = await queue.peek();
+    expect(retried.map((e) => e.event)).toEqual(['a']);
+  });
 });

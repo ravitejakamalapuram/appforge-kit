@@ -20,4 +20,9 @@ describe('GET /v1/config/:product', () => {
     const response = await SELF.fetch('https://example.com/v1/config/json-workbench');
     expect(await response.json()).toEqual({ paywallEnabled: false });
   });
+
+  it('returns 400, not an uncaught exception, for a malformed percent-encoded product segment (Review finding)', async () => {
+    const response = await SELF.fetch('https://example.com/v1/config/%zz');
+    expect(response.status).toBe(400);
+  });
 });

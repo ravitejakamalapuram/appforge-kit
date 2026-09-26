@@ -75,11 +75,21 @@ describe('POST /v1/events', () => {
     expect(response.status).toBe(400);
   });
 
-  it('returns 429 once the per-IP rate limit is exceeded', async () => {
-    for (let i = 0; i < 60; i++) {
-      await post([envelope({ seq: i })]);
+  it('returns 429 once the per-IP rate limit is exceeded, at the exact boundary (Review finding: the limiter is a module-level singleton shared across every test in this file, and every other test above also posts from 203.0.113.1 — a distinct IP here is required for this test to prove anything about the actual 60/min threshold rather than just "eventually, some 429 happens")', async () => {
+    const ip = '203.0.113.42';
+    async function postFrom(body: unknown) {
+      return SELF.fetch('https://example.com/v1/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ip },
+        body: JSON.stringify(body),
+      });
     }
-    const response = await post([envelope({ seq: 60 })]);
+    let lastStatus = 0;
+    for (let i = 0; i < 60; i++) {
+      lastStatus = (await postFrom([envelope({ install_id: 'rate-limit-test', seq: i })])).status;
+    }
+    expect(lastStatus).toBe(202);
+    const response = await postFrom([envelope({ install_id: 'rate-limit-test', seq: 60 })]);
     expect(response.status).toBe(429);
   });
 });

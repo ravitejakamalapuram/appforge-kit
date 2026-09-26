@@ -38,4 +38,19 @@ describe('POST /v1/feedback', () => {
     });
     expect(response.status).toBe(400);
   });
+
+  it('returns 400 for a rating outside 1-5 (Review finding: rating had no range check)', async () => {
+    const response = await post({ product: 'json-workbench', source: 'in_app', rating: 0, text: 'hi' });
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 400 for a product name longer than 64 characters (Review finding: unbounded field sizes)', async () => {
+    const response = await post({ product: 'x'.repeat(65), source: 'in_app', rating: 4, text: 'hi' });
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 400 for feedback text longer than 2000 characters', async () => {
+    const response = await post({ product: 'json-workbench', source: 'in_app', rating: 4, text: 'x'.repeat(2001) });
+    expect(response.status).toBe(400);
+  });
 });

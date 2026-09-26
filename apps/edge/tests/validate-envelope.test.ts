@@ -32,4 +32,21 @@ describe('validateEnvelope', () => {
     expect(validateEnvelope({ ...VALID, seq: 1.5 })).toBeNull();
     expect(validateEnvelope({ ...VALID, seq: -1 })).toBeNull();
   });
+
+  it('rejects an env value outside dev|staging|prod (Review finding: env was never checked)', () => {
+    expect(validateEnvelope({ ...VALID, env: 'production' })).toBeNull();
+  });
+
+  it('rejects an install_id longer than 128 characters (Review finding: unbounded field sizes)', () => {
+    expect(validateEnvelope({ ...VALID, install_id: 'x'.repeat(129) })).toBeNull();
+    expect(validateEnvelope({ ...VALID, install_id: 'x'.repeat(128) })).not.toBeNull();
+  });
+
+  it('rejects an event name longer than 64 characters', () => {
+    expect(validateEnvelope({ ...VALID, event: 'x'.repeat(65) })).toBeNull();
+  });
+
+  it('rejects a product name longer than 64 characters', () => {
+    expect(validateEnvelope({ ...VALID, product: 'x'.repeat(65) })).toBeNull();
+  });
 });

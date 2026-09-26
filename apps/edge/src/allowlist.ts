@@ -28,6 +28,17 @@ export function getAllowlist(product: string): ProductAllowlist | undefined {
   return PRODUCTS[product];
 }
 
+const MAX_PROP_STRING_LENGTH = 500;
+
+// A value not allowed here (nested objects/arrays, or a string over the length cap) is dropped
+// like an undeclared key, not truncated or serialized — an unbounded or nested prop value could
+// otherwise smuggle arbitrary blobs or PII into an "allowlisted" key (Review finding).
+function isAllowedPropValue(value: unknown): boolean {
+  if (typeof value === 'boolean' || typeof value === 'number') return true;
+  if (typeof value === 'string') return value.length <= MAX_PROP_STRING_LENGTH;
+  return false;
+}
+
 export function filterProps(
   event: string,
   props: Record<string, unknown>,
@@ -37,7 +48,7 @@ export function filterProps(
   if (!allowed) return {};
   const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(props)) {
-    if (allowed.has(key)) filtered[key] = value;
+    if (allowed.has(key) && isAllowedPropValue(value)) filtered[key] = value;
   }
   return filtered;
 }

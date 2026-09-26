@@ -1,12 +1,36 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { applySchema } from './test-helpers.js';
+import { isAuthorized } from '../src/handlers/ingest.js';
 
 beforeEach(async () => {
   await applySchema(env.DB);
 });
 
-async function post(source: string, body: unknown, token = env.INGEST_ADMIN_TOKEN) {
+describe('isAuthorized', () => {
+  it('rejects when the configured admin token is empty (Review finding: fail-open on a missing secret)', () => {
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer undefined' } });
+    expect(isAuthorized(request, '')).toBe(false);
+  });
+
+  it('rejects "Bearer undefined" even when the configured token happens to be unset (same finding, direct repro)', () => {
+    const request = new Request('https://example.com', { headers: { Authorization: `Bearer ${undefined}` } });
+    expect(isAuthorized(request, undefined as unknown as string)).toBe(false);
+  });
+
+  it('accepts a real configured token presented correctly', () => {
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer a-real-32-char-or-longer-token-value' } });
+    expect(isAuthorized(request, 'a-real-32-char-or-longer-token-value')).toBe(true);
+  });
+});
+
+// Hardcoded (matches .dev.vars), not read from env.INGEST_ADMIN_TOKEN — a test that reads its
+// expected token from the same binding the server checks against would still pass even if that
+// binding were empty/unset, since both sides would agree on "nothing". See the isAuthorized
+// unit tests above for why that mattered here.
+const VALID_TOKEN = 'dev-only-placeholder-token';
+
+async function post(source: string, body: unknown, token: string = VALID_TOKEN) {
   return SELF.fetch(`https://example.com/v1/ingest/${source}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
