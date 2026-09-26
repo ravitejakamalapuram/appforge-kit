@@ -20,8 +20,8 @@ describe('launchExtension', () => {
 
   it('reports the service worker as "activated" via the ServiceWorker CDP tracker', async () => {
     ext = await launchExtension(CHROME_VANILLA_DIST);
-    const found = await ext.swTracker.waitUntil(() => ext!.swTracker.find(ext!.extensionId) !== undefined, 5000);
-    expect(found).toBe(true);
+    const activated = await ext.swTracker.waitUntil(() => ext!.swTracker.find(ext!.extensionId)?.status === 'activated', 10_000);
+    expect(activated).toBe(true);
     expect(ext.swTracker.find(ext.extensionId)?.status).toBe('activated');
   });
 });
