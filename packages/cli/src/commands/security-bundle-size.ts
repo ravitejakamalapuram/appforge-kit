@@ -32,14 +32,21 @@ function collectFileSizes(distDir: string): BundleFileSize[] {
 }
 
 /**
- * Exit codes: 0 ok, 2 invalid input (dist dir missing/unreadable, or maxKb not a finite positive
- * number — an unvalidated NaN/negative maxKb would make `totalBytes <= maxBytes` silently always
- * false in JS, i.e. every build "fails the budget" with no diagnosable cause), 9 budget exceeded.
+ * Exit codes: 0 ok, 2 invalid input (dist dir missing/unreadable, or maxKb negative/non-finite —
+ * an unvalidated NaN/negative maxKb would make `totalBytes <= maxBytes` silently always false in
+ * JS, i.e. every build "fails the budget" with no diagnosable cause), 9 budget exceeded.
+ *
+ * maxKb === 0 means report-only: no single budget fits every real caller (a tiny template and an
+ * extension bundling Monaco+DuckDB WASM are both legitimate), so 0 always passes while still
+ * reporting the real size, letting a caller opt into enforcement with an explicit positive value
+ * rather than being silently broken by whatever default this command ships with (fix for a
+ * Critical finding from final review: json-workbench, an existing real caller with a ~48.8MB
+ * dist/, would otherwise fail every build the moment a nonzero default shipped).
  */
 export function runSecurityBundleSize(opts: SecurityBundleSizeOptions): number {
-  if (!Number.isFinite(opts.maxKb) || opts.maxKb <= 0) {
+  if (!Number.isFinite(opts.maxKb) || opts.maxKb < 0) {
     printOutput(
-      buildOutput('security-bundle-size', false, undefined, [`--max-kb must be a finite, positive number, got "${opts.maxKb}"`]),
+      buildOutput('security-bundle-size', false, undefined, [`--max-kb must be a finite, non-negative number, got "${opts.maxKb}"`]),
       opts.json
     );
     return 2;
@@ -56,8 +63,14 @@ export function runSecurityBundleSize(opts: SecurityBundleSizeOptions): number {
     return 2;
   }
 
+  if (opts.maxKb === 0) {
+    const totalBytes = files.reduce((sum, f) => sum + f.bytes, 0);
+    printOutput(buildOutput('security-bundle-size', true, { ok: true, totalBytes, maxBytes: 0, errors: [], enforced: false }, []), opts.json);
+    return 0;
+  }
+
   const maxBytes = Math.floor(opts.maxKb * 1024);
   const result = checkBundleSize(files, maxBytes);
-  printOutput(buildOutput('security-bundle-size', result.ok, result, result.errors), opts.json);
+  printOutput(buildOutput('security-bundle-size', result.ok, { ...result, enforced: true }, result.errors), opts.json);
   return result.ok ? 0 : 9;
 }

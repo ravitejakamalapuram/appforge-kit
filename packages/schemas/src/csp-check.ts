@@ -12,10 +12,18 @@ export interface CspCheckResult {
   errors: string[];
 }
 
+/**
+ * Matches CSP source-list tokens exactly (case-insensitively), not by substring. A substring
+ * check on 'unsafe-eval' would also match 'wasm-unsafe-eval' — a distinct, MV3-sanctioned
+ * keyword for WebAssembly that Chrome's own default extension_pages CSP includes — which would
+ * make this check fail extensions that never opted into anything unsafe. CSP keyword tokens are
+ * also case-insensitive per the CSP spec, so 'UNSAFE-EVAL' must still be caught.
+ */
 function checkCspString(label: string, csp: unknown, errors: string[]): void {
   if (typeof csp !== 'string') return;
+  const tokens = csp.toLowerCase().split(/[\s;]+/);
   for (const unsafe of UNSAFE_CSP_VALUES) {
-    if (csp.includes(unsafe)) {
+    if (tokens.includes(`'${unsafe}'`)) {
       errors.push(`content_security_policy.${label} allows '${unsafe}': ${csp}`);
     }
   }

@@ -89,6 +89,23 @@ describe('checkContentSecurityPolicy', () => {
     expect(checkContentSecurityPolicy('nope')).toEqual({ ok: false, errors: ['manifest must be a JSON object'] });
   });
 
+  it('does not flag wasm-unsafe-eval as unsafe-eval (fix for Important review finding: substring match wrongly matched the standard MV3 WASM CSP keyword)', () => {
+    const result = checkContentSecurityPolicy({
+      ...VANILLA_TEMPLATE_MANIFEST,
+      content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'" },
+    });
+    expect(result).toEqual({ ok: true, errors: [] });
+  });
+
+  it('is case-insensitive: an upper-case UNSAFE-EVAL token is still flagged (fix for Important review finding)', () => {
+    const result = checkContentSecurityPolicy({
+      ...VANILLA_TEMPLATE_MANIFEST,
+      content_security_policy: { extension_pages: "script-src 'self' 'UNSAFE-EVAL'" },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toContain('unsafe-eval');
+  });
+
   it('does not crash on a malformed content_scripts entry (not an object, or js missing)', () => {
     expect(checkContentSecurityPolicy({ ...VANILLA_TEMPLATE_MANIFEST, content_scripts: ['not-an-object', {}] })).toEqual({ ok: true, errors: [] });
   });

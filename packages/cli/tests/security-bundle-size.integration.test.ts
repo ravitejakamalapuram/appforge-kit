@@ -52,15 +52,34 @@ describe('runSecurityBundleSize', () => {
     expect(runSecurityBundleSize({ distDir: path.join(dir, 'does-not-exist'), maxKb: 100, json: true })).toBe(2);
   });
 
-  it('returns 2 for a non-finite or non-positive maxKb instead of a silently-always-failing comparison (Review Focus)', () => {
+  it('returns 2 for a non-finite or negative maxKb instead of a silently-always-failing comparison (Review Focus)', () => {
     const distDir = makeDist('bad-max-kb', { 'index.js': 'a' });
     expect(runSecurityBundleSize({ distDir, maxKb: NaN, json: true })).toBe(2);
     expect(runSecurityBundleSize({ distDir, maxKb: -5, json: true })).toBe(2);
-    expect(runSecurityBundleSize({ distDir, maxKb: 0, json: true })).toBe(2);
   });
 
   it('is ok exactly at the budget boundary', () => {
     const distDir = makeDist('exact-boundary', { 'index.js': 'a'.repeat(1024) });
     expect(runSecurityBundleSize({ distDir, maxKb: 1, json: true })).toBe(0);
+  });
+
+  it('maxKb 0 means report-only: never fails regardless of size, and marks the result unenforced (fix for Critical review finding: a single global default budget cannot fit every real app, e.g. json-workbench bundles Monaco+DuckDB WASM at ~48.8MB)', () => {
+    const distDir = makeDist('report-only-huge', { 'index.js': 'a'.repeat(500_000) });
+    expect(runSecurityBundleSize({ distDir, maxKb: 0, json: true })).toBe(0);
+  });
+
+  it('maxKb 0 report-only still reports the real totalBytes (not silently 0) so the PR comment stays informative', () => {
+    const distDir = makeDist('report-only-visible', { 'index.js': 'a'.repeat(250) });
+    const capture = { out: '' };
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => { capture.out += chunk; return true; }) as typeof process.stdout.write;
+    try {
+      runSecurityBundleSize({ distDir, maxKb: 0, json: true });
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+    const parsed = JSON.parse(capture.out.trim());
+    expect(parsed.data.totalBytes).toBe(250);
+    expect(parsed.data.enforced).toBe(false);
   });
 });
