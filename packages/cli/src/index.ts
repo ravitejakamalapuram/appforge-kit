@@ -3,6 +3,7 @@ import { Command, CommanderError } from 'commander';
 import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
 import { runSecurityPermissions } from './commands/security-permissions.js';
+import { runTestE2e } from './commands/test-e2e.js';
 import { runSecurityCsp } from './commands/security-csp.js';
 import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { buildOutput, printOutput } from './output.js';
@@ -80,6 +81,26 @@ security
   .option('--json', 'machine-readable output', false)
   .action((opts: { dist: string; maxKb: string; json: boolean }) => {
     process.exitCode = runSecurityBundleSize({ distDir: opts.dist, maxKb: Number(opts.maxKb), json: opts.json });
+  });
+
+program
+  .command('test')
+  .description('Run test suites for an AppForge product (currently: --e2e, the Playwright Chrome extension harness)')
+  .option('--e2e', 'run the Playwright e2e suite', false)
+  .option('--dir <path>', 'product directory to build and test', '.')
+  .option('--dist <path>', 'a pre-built extension dist directory (skips the build step)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { e2e: boolean; dir: string; dist?: string; json: boolean }) => {
+    if (!opts.e2e) {
+      printOutput(buildOutput('test', false, undefined, ['no test type selected; pass --e2e']), opts.json);
+      process.exitCode = 2;
+      return;
+    }
+    const code = await runTestE2e({ dir: opts.dir, dist: opts.dist, json: opts.json });
+    // Defense in depth against a leaked Playwright/Chromium handle keeping the event loop alive
+    // (see @appforge/e2e's launch.ts docstring — a launch failure closes its own browser context,
+    // but an explicit exit here means a future leak fails fast instead of hanging the CI job).
+    process.exit(code);
   });
 
 try {

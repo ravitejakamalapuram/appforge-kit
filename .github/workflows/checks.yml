@@ -161,6 +161,12 @@ jobs:
 
       - name: Build the appforge CLI
         working-directory: appforge-kit-checkout
+        # Skip @appforge/e2e's postinstall Chromium download here: this job only ever runs
+        # `appforge validate`/`appforge security permissions` below, never the e2e harness, so
+        # downloading a browser it will never use would add ~170MB to every caller repo's PR
+        # checks for no benefit (final-review finding I4 on P1-11's plan).
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
         run: pnpm install --frozen-lockfile && pnpm build
 
       - name: appforge validate

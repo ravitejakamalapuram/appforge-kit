@@ -40,6 +40,12 @@ describe('appforge CLI binary (commander wiring, not just the exported run* func
     const { code } = run(['product-transition', '--from', 'DISCOVERED', '--to', 'RESEARCHING', '--not-a-real-flag']);
     expect(code).toBe(2);
   });
+
+  it('exits 2 for `appforge test` with no --e2e flag (Review Focus: distinct from an unwired/unknown command, not just "any exit 2")', () => {
+    const { code, stdout } = run(['test', '--json']);
+    expect(code).toBe(2);
+    expect(JSON.parse(stdout)).toMatchObject({ schema: 'cli-output@1', command: 'test', errors: ['no test type selected; pass --e2e'] });
+  });
 });
 
 describe('appforge security permissions (nested subcommand wiring)', () => {
