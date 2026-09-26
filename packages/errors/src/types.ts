@@ -6,7 +6,10 @@ export interface ErrorEvent {
   timestamp: number;
 }
 
-export type ErrorSink = (event: ErrorEvent) => void;
+/** Async sinks are expected (a real telemetry sink is almost always a fetch) — the return type
+ * says so explicitly, rather than declaring `void` and leaving callers to discover at runtime
+ * that a promise came back. */
+export type ErrorSink = (event: ErrorEvent) => void | Promise<void>;
 
 /**
  * The subset of EventTarget needed to listen for global errors — injected so this package never
