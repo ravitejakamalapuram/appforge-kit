@@ -1,0 +1,16 @@
+name = "appforge-edge"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "appforge-edge-db"
+database_id = "REPLACE_AFTER_WRANGLER_D1_CREATE"
+
+[vars]
+APPFORGE_ENV = "dev"
+# Placeholder until `wrangler secret put INGEST_ADMIN_TOKEN` is run before any real ingest
+# traffic (Task 6) — fine for local dev and for the Miniflare-simulated tests in this plan,
+# which never touch a real Cloudflare account.
+INGEST_ADMIN_TOKEN = "dev-only-placeholder-token"
