@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# This repo publishes no store items and holds no store/cloud credentials, so — unlike the
+# release-platform-based CI in the product repos — this workflow needs no OIDC/id-token access
+# and no secrets at all. It only verifies the workspace: typecheck, build (every package's real
+# build script, including `vite build` for Chrome extension templates), test, and lint.
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm build
+
+      - run: pnpm test
+
+      - run: pnpm lint
