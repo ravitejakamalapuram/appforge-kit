@@ -1,8 +1,37 @@
 name: appforge-checks
 
-# Reusable workflow (P1-09, first scope): permission-diff PR comment + secret scanning.
-# OSV dependency scanning, a CSP check, and bundle-size reporting are a deliberate follow-up —
-# not built here — see the master plan §36-adjacent backlog (P1-09 continuation).
+# Reusable workflow (P1-09 + P1-12): permission-diff PR comment, secret scanning, OSV
+# dependency scanning, a CSP/remote-code check, and a bundle-size budget.
+#
+# Design notes (see docs/superpowers/plans/2026-09-26-appforge-security-checks.md for the
+# full rationale, and its final-review fix pass for the items below marked "fix for review finding"):
+#   - OSV: fails the job only on HIGH/CRITICAL severity findings (per each vulnerability's
+#     `database_specific.severity` field), or any `MAL-*` id (the OpenSSF/OSV malicious-packages
+#     feed — fix for review finding: a known-malicious dependency has no severity field but is
+#     the worst possible finding a scan can produce, so it must block regardless). Lower-severity
+#     or unclassified findings are still reported in the PR comment, just not blocking. If the
+#     scanner itself fails to produce valid output (network issue, binary crash, etc. — distinct
+#     from "ran cleanly and found nothing"), that is treated as an *incomplete* scan: reported as
+#     a warning, not a hard failure (fail-open on scanner infra issues, not on scanner findings —
+#     avoids flaky CI from a third-party API being down; the next successful run still catches
+#     real vulnerabilities) — fix for review finding: a scanner crash previously produced an
+#     unreadable osv.json that either crashed the PR-comment step or made the severity gate
+#     silently pass.
+#   - CSP: a deterministic check of the built manifest.json only (no HTML/JS parsing) — fails
+#     on an exact (case-insensitive) `'unsafe-eval'`/`'unsafe-inline'` CSP source-list token in
+#     content_security_policy.extension_pages/sandbox, or a remote (http(s)/protocol-relative)
+#     background.service_worker or content_scripts[].js entry. Token matching, not substring
+#     matching — fix for review finding: a substring check also matched `'wasm-unsafe-eval'`,
+#     the distinct, MV3-sanctioned WebAssembly keyword Chrome's own default CSP includes.
+#   - Bundle-size: total bytes of everything under the built dist/ directory, excluding *.map
+#     files (source maps are a dev artifact never loaded by the running extension). Default is
+#     0 = report-only (always passes, still shows the real size) — fix for review finding: one
+#     fixed default budget cannot fit every real caller (a tiny template vs. an extension
+#     bundling Monaco+DuckDB WASM at ~48.8MB are both legitimate), so enforcement is opt-in via
+#     an explicit `max-bundle-size-kb` greater than 0, never silently imposed on an existing
+#     caller by a version bump.
+#   - Still explicitly OUT OF SCOPE: network/data-flow/runtime checks — those need a real e2e
+#     harness with request logging (separate, in-flight work in this repo).
 #
 # A caller repo adds a small workflow that does:
 #   jobs:
@@ -31,6 +60,16 @@ on:
         required: false
         type: string
         default: ".appforge/permissions.yaml"
+      max-bundle-size-kb:
+        description: "Maximum total size, in KB, of the built dist/ directory excluding source maps (*.map files). 0 (the default) means report-only — the size is always shown in the PR comment but never fails the job. Set a positive number to enforce a budget; no single default fits every caller (e.g. a Chrome extension bundling Monaco+DuckDB WASM can legitimately be tens of megabytes)."
+        required: false
+        type: number
+        default: 0
+      osv-scanner-version:
+        description: "osv-scanner release tag to install and run (https://github.com/google/osv-scanner/releases)"
+        required: false
+        type: string
+        default: "v2.6.0"
       node-version:
         required: false
         type: string
@@ -63,6 +102,33 @@ jobs:
 
       - name: Save built manifest
         run: cp "${{ inputs.manifest-path }}" "${{ runner.temp }}/head-manifest.json"
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/${{ inputs.osv-scanner-version }}/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+
+      # Runs now, before the appforge-base-checkout/ and appforge-kit-checkout/ directories
+      # exist below (Review Focus: those checkouts have their own lockfiles — scanning after
+      # they exist would misattribute appforge-kit's own dependency vulnerabilities to the
+      # caller repo). `|| true` because osv-scanner exits non-zero both when vulnerabilities are
+      # found (expected, severity-gated later) AND on a real scan failure (network error, no
+      # lockfiles, etc) — those two cases aren't distinguishable from the exit code alone. So
+      # instead we validate the JSON it actually wrote: a missing, empty, or malformed osv.json
+      # means the scan didn't complete, and we substitute an explicitly-marked empty result
+      # rather than let a later step crash (JSON.parse on an unreadable file) or silently treat
+      # "no output" as "found nothing" (fix for review finding).
+      - name: Run OSV dependency scan
+        run: |
+          osv-scanner scan source -r --format json --output-file "${{ runner.temp }}/osv.json" . || true
+          # jq's `-e` alone is not enough here: jq treats a truly empty (0-byte) file as zero
+          # output records rather than an error, so `jq -e '.results != null' <empty file>`
+          # exits 0 with no output — the `[ -s ... ]` non-empty check is required alongside it,
+          # confirmed locally against empty/missing/malformed/no-results-key/well-formed fixtures.
+          if ! { [ -s "${{ runner.temp }}/osv.json" ] && jq -e '.results != null' "${{ runner.temp }}/osv.json" >/dev/null 2>&1; }; then
+            echo "::warning::osv-scanner did not produce valid results (see the step output above) — treating this run's dependency scan as incomplete, not clean"
+            echo '{"results":[],"appforge_scan_incomplete":true}' > "${{ runner.temp }}/osv.json"
+          fi
 
       # The permission-diff (which permissions are newly added, and are any of them high-risk)
       # only means something relative to a base to compare against, so it only runs for PRs.
@@ -117,6 +183,20 @@ jobs:
             --previous-manifest "${{ runner.temp }}/base-manifest.json" \
             --json | tee "${{ runner.temp }}/security.json"
 
+      - name: appforge security csp
+        run: |
+          node appforge-kit-checkout/packages/cli/dist/index.js security csp \
+            --manifest "${{ runner.temp }}/head-manifest.json" \
+            --json | tee "${{ runner.temp }}/csp.json"
+
+      - name: appforge security bundle-size
+        run: |
+          dist_dir=$(dirname "${{ inputs.manifest-path }}")
+          node appforge-kit-checkout/packages/cli/dist/index.js security bundle-size \
+            --dist "$dist_dir" \
+            --max-kb "${{ inputs.max-bundle-size-kb }}" \
+            --json | tee "${{ runner.temp }}/bundle-size.json"
+
       - name: Post or update the PR comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -126,8 +206,12 @@ jobs:
             const tmp = process.env.RUNNER_TEMP;
             const validate = JSON.parse(fs.readFileSync(`${tmp}/validate.json`, 'utf8'));
             const security = JSON.parse(fs.readFileSync(`${tmp}/security.json`, 'utf8'));
+            const csp = JSON.parse(fs.readFileSync(`${tmp}/csp.json`, 'utf8'));
+            const bundleSize = JSON.parse(fs.readFileSync(`${tmp}/bundle-size.json`, 'utf8'));
+            const osv = JSON.parse(fs.readFileSync(`${tmp}/osv.json`, 'utf8'));
             const marker = '<!-- appforge-checks -->';
             const lines = [marker, '### AppForge checks', ''];
+
             lines.push(
               validate.ok
                 ? '✅ `permissions.yaml` schema valid'
@@ -142,6 +226,56 @@ jobs:
             if (!security.ok && security.data?.highRisk?.length > 0) {
               lines.push('', '**⚠️ New high-risk permissions require board approval before this can ship.**');
             }
+            lines.push('');
+            lines.push(
+              csp.ok
+                ? '✅ No unsafe CSP directives or remote script references'
+                : '❌ CSP/remote-code issues found:\n' + csp.errors.map((e) => `- ${e}`).join('\n')
+            );
+            lines.push('');
+            if (bundleSize.data?.enforced === false) {
+              lines.push(`ℹ️ Bundle size ${bundleSize.data.totalBytes} bytes (report-only — no budget set via max-bundle-size-kb)`);
+            } else {
+              lines.push(
+                bundleSize.ok
+                  ? `✅ Bundle size ${bundleSize.data.totalBytes} bytes (budget ${bundleSize.data.maxBytes} bytes)`
+                  : `❌ Bundle size budget exceeded:\n` + bundleSize.errors.map((e) => `- ${e}`).join('\n')
+              );
+            }
+            lines.push('');
+
+            if (osv.appforge_scan_incomplete) {
+              lines.push('⚠️ osv-scanner did not complete this run — dependency vulnerabilities were not checked (see step output above); this does not fail the job, but treat it as unverified, not clean');
+            } else {
+              // A vulnerability is treated as blocking when its `database_specific.severity`
+              // field (populated by GHSA-sourced npm/pnpm advisories) is HIGH/CRITICAL, or when
+              // its id is a `MAL-*` OpenSSF/OSV malicious-package record (those have no severity
+              // field but are the worst possible finding — fix for review finding: they must
+              // still block). A finding with neither is still listed here (severity shown as
+              // UNKNOWN) but does not gate the job (Review Focus: it must not silently disappear
+              // from the comment).
+              const vulns = (osv.results ?? []).flatMap((r) => r.packages ?? []).flatMap((p) =>
+                (p.vulnerabilities ?? []).map((v) => ({
+                  pkg: p.package?.name ?? 'unknown',
+                  version: p.package?.version ?? 'unknown',
+                  id: v.id,
+                  severity: v.database_specific?.severity ?? 'UNKNOWN',
+                }))
+              );
+              const isBlocking = (v) => ['HIGH', 'CRITICAL'].includes(String(v.severity).toUpperCase()) || String(v.id).startsWith('MAL-');
+              const blocking = vulns.filter(isBlocking);
+              if (vulns.length === 0) {
+                lines.push('✅ osv-scanner found no known dependency vulnerabilities');
+              } else {
+                const summary = vulns.map((v) => `- ${v.pkg}@${v.version}: ${v.id} (${v.severity})`).join('\n');
+                lines.push(
+                  blocking.length > 0
+                    ? `❌ osv-scanner found ${blocking.length} blocking (HIGH/CRITICAL or known-malicious) vulnerabilities (of ${vulns.length} total):\n${summary}`
+                    : `⚠️ osv-scanner found ${vulns.length} lower-severity vulnerabilities (not blocking):\n${summary}`
+                );
+              }
+            }
+
             const body = lines.join('\n');
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
@@ -158,17 +292,48 @@ jobs:
       - name: Fail the job if any appforge check failed
         run: |
           tmp="${{ runner.temp }}"
+          fail=0
+
           ok=$(jq -r '.ok' "$tmp/validate.json")
           if [ "$ok" != "true" ]; then
             echo "::error::appforge validate failed — see the step output above"
-            exit 1
+            fail=1
           fi
+
           if [ -f "$tmp/security.json" ]; then
             ok2=$(jq -r '.ok' "$tmp/security.json")
             if [ "$ok2" != "true" ]; then
               echo "::error::appforge security permissions failed — see the PR comment or step output above"
-              exit 1
+              fail=1
             fi
+          fi
+
+          ok3=$(jq -r '.ok' "$tmp/csp.json")
+          if [ "$ok3" != "true" ]; then
+            echo "::error::appforge security csp failed — see the PR comment or step output above"
+            fail=1
+          fi
+
+          ok4=$(jq -r '.ok' "$tmp/bundle-size.json")
+          if [ "$ok4" != "true" ]; then
+            echo "::error::appforge security bundle-size failed — see the PR comment or step output above"
+            fail=1
+          fi
+
+          # See the top-of-file comment: HIGH/CRITICAL findings (by database_specific.severity)
+          # or any MAL-* (known-malicious package) id fail the job. Anything else is reported
+          # but non-blocking. An incomplete scan (appforge_scan_incomplete) has an empty
+          # results array by construction (see "Run OSV dependency scan"), so this naturally
+          # finds zero blocking vulnerabilities and does not fail the job — a deliberate
+          # fail-open choice on scanner infra issues, not on scanner findings.
+          blocking_vulns=$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select(((.database_specific.severity // "") | ascii_upcase | (. == "HIGH" or . == "CRITICAL")) or ((.id // "") | startswith("MAL-")))] | length' "$tmp/osv.json")
+          if [ "$blocking_vulns" -gt 0 ]; then
+            echo "::error::osv-scanner found $blocking_vulns blocking (HIGH/CRITICAL or known-malicious) vulnerabilities — see the PR comment or osv.json"
+            fail=1
+          fi
+
+          if [ "$fail" -eq 1 ]; then
+            exit 1
           fi
 
   secret-scan:

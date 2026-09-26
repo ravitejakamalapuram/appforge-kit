@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,5 +85,47 @@ describe('appforge security permissions (nested subcommand wiring)', () => {
     ].join('\n'));
     const { code } = run(['security', 'permissions', '--manifest', manifest, '--permissions', permissions]);
     expect(code).toBe(6);
+  });
+});
+
+describe('appforge security csp (nested subcommand wiring)', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-csp-binary-')); });
+  afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it('exits 0 for a manifest with a strict CSP', () => {
+    const manifest = path.join(dir, 'manifest-ok.json');
+    writeFileSync(manifest, JSON.stringify({ content_security_policy: { extension_pages: "script-src 'self'" } }));
+    const { code } = run(['security', 'csp', '--manifest', manifest]);
+    expect(code).toBe(0);
+  });
+
+  it('exits 7, via the real nested "security csp" subcommand, for unsafe-eval', () => {
+    const manifest = path.join(dir, 'manifest-bad.json');
+    writeFileSync(manifest, JSON.stringify({ content_security_policy: { extension_pages: "script-src 'unsafe-eval'" } }));
+    const { code } = run(['security', 'csp', '--manifest', manifest]);
+    expect(code).toBe(7);
+  });
+});
+
+describe('appforge security bundle-size (nested subcommand wiring)', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-bundle-size-binary-')); });
+  afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it('exits 0 when under budget', () => {
+    const distDir = path.join(dir, 'under');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, 'index.js'), 'a'.repeat(10));
+    const { code } = run(['security', 'bundle-size', '--dist', distDir, '--max-kb', '1']);
+    expect(code).toBe(0);
+  });
+
+  it('exits 9, via the real nested "security bundle-size" subcommand, when over budget', () => {
+    const distDir = path.join(dir, 'over');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, 'index.js'), 'a'.repeat(2000));
+    const { code } = run(['security', 'bundle-size', '--dist', distDir, '--max-kb', '1']);
+    expect(code).toBe(9);
   });
 });
