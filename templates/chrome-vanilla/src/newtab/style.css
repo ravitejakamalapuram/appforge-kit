@@ -1,0 +1,18 @@
+body {
+  font-family: system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  margin: 0;
+  background: #fafafa;
+  color: #111;
+}
+
+body[data-theme='dark'] {
+  background: #111;
+  color: #fafafa;
+}
+
+main {
+  text-align: center;
+}
