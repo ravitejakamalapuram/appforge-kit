@@ -30,6 +30,9 @@ jobs:
 
       - run: pnpm build
 
+      - name: Run the Playwright e2e harness against chrome-vanilla (P1-11 real invocation)
+        run: pnpm --filter appforge-chrome-vanilla-template run test:e2e
+
       - run: pnpm test
 
       - run: pnpm lint
