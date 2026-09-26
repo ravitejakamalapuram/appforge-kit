@@ -33,5 +33,24 @@ describe('sendTypedMessage', () => {
       await vi.advanceTimersByTimeAsync(1000);
       await assertion;
     });
+
+    it('clears its timeout on a successful response instead of leaving a timer running (fix: was leaking a live timer per call)', async () => {
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const runtime: ChromeRuntime = { sendMessage: async () => ({ requestId: 'x', ok: true, result: 'fast' }) };
+      await sendTypedMessage(runtime, 'ping', {}, { timeoutMs: 5000 });
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('rejects with the real error, and leaves no dangling timeout that later rejects unhandled, when sendMessage throws synchronously (fix: a real MV3 failure — "Extension context invalidated" after a reload)', async () => {
+      const runtime: ChromeRuntime = {
+        sendMessage: () => { throw new Error('Extension context invalidated'); },
+      };
+      await expect(sendTypedMessage(runtime, 'ping', {}, { timeoutMs: 1000 })).rejects.toThrow('Extension context invalidated');
+      // If the timeout set up before the synchronous throw were never cleared, it would still
+      // fire here and reject with no handler — vitest's own unhandled-rejection detector (as
+      // triggered the equivalent case in message-router.test.ts) would fail this test run.
+      await vi.advanceTimersByTimeAsync(1000);
+    });
   });
 });
