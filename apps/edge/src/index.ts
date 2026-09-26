@@ -1,13 +1,11 @@
 import { handleEvents } from './handlers/events.js';
 import { handleGetMetrics } from './handlers/metrics.js';
 import { handleFeedback } from './handlers/feedback.js';
+import { handleGetConfig } from './handlers/config.js';
+import { handleIngest, isAuthorized } from './handlers/ingest.js';
 import { RateLimiter } from './rate-limiter.js';
 
-export interface Env {
-  DB: D1Database;
-  APPFORGE_ENV: string;
-  INGEST_ADMIN_TOKEN: string;
-}
+export type Env = Cloudflare.Env;
 
 const eventsLimiter = new RateLimiter(60, 60_000); // 60 req/min/IP — generous for batched clients
 const feedbackLimiter = new RateLimiter(30, 60_000);
@@ -38,6 +36,19 @@ export default {
         return Response.json({ error: 'rate limit exceeded' }, { status: 429 });
       }
       return handleFeedback(request, env.DB);
+    }
+
+    const configMatch = url.pathname.match(/^\/v1\/config\/([^/]+)$/);
+    if (configMatch && request.method === 'GET') {
+      return handleGetConfig(decodeURIComponent(configMatch[1]), env.DB);
+    }
+
+    const ingestMatch = url.pathname.match(/^\/v1\/ingest\/([^/]+)$/);
+    if (ingestMatch && request.method === 'POST') {
+      if (!isAuthorized(request, env.INGEST_ADMIN_TOKEN)) {
+        return Response.json({ error: 'unauthorized' }, { status: 401 });
+      }
+      return handleIngest(request, decodeURIComponent(ingestMatch[1]), env.DB);
     }
 
     return new Response('Not found', { status: 404 });

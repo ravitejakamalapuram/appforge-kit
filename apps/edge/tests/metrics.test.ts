@@ -16,7 +16,7 @@ describe('GET /v1/metrics', () => {
   it('returns metrics rows for the requested product', async () => {
     const response = await SELF.fetch('https://example.com/v1/metrics?product=json-workbench');
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = (await response.json()) as { metrics: unknown[] };
     expect(body.metrics).toHaveLength(2);
   });
 
@@ -24,7 +24,7 @@ describe('GET /v1/metrics', () => {
     const response = await SELF.fetch(
       'https://example.com/v1/metrics?product=json-workbench&name=installs&from=2026-09-02'
     );
-    const body = await response.json();
+    const body = (await response.json()) as { metrics: unknown[] };
     expect(body.metrics).toEqual([
       { product: 'json-workbench', date: '2026-09-02', name: 'installs', value: 15, source: 'cws_csv' },
     ]);
