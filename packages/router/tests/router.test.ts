@@ -75,4 +75,17 @@ describe('TieredModelRouter.select — tier selection rules', () => {
     const bad = { taskType: 'write_prd', complexity: 'URGENT' as unknown as Complexity, risk: 'low', budgetRemainingPct: 1, latency: 'batch' } as const;
     expect(() => router.select(bad)).toThrow(/Unknown complexity/);
   });
+
+  it('never downgrades CRITICAL even when budget is very low (fix: independent review must not be silently dropped)', () => {
+    const router = new TieredModelRouter(baseConfig);
+    const decision = router.select({ taskType: 'security_review', complexity: 'CRITICAL', risk: 'high', budgetRemainingPct: 0.01, latency: 'batch' });
+    expect(decision.model).toBe('claude-opus-x');
+    expect(decision.independentReview).toEqual({ provider: 'openai', model: 'gpt-top-x' });
+  });
+
+  it('keeps a high-risk request at HIGH or above even when budget is very low (fix: risk:high >= HIGH must survive budget downgrade)', () => {
+    const router = new TieredModelRouter(baseConfig);
+    const decision = router.select({ taskType: 'security_review', complexity: 'NORMAL', risk: 'high', budgetRemainingPct: 0.01, latency: 'interactive' });
+    expect(decision.model).toBe('claude-opus-x');
+  });
 });

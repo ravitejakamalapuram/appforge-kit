@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runValidate } from '../src/commands/validate.js';
 import { runProductTransition } from '../src/commands/product-transition.js';
+import type { ProductState } from '@appforge/schemas';
 
 let dir: string;
 beforeAll(() => { dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-test-')); });
@@ -46,5 +47,21 @@ describe('runProductTransition', () => {
     const file = path.join(dir, 'evidence.json');
     writeFileSync(file, JSON.stringify({ opportunityId: 'OPP-0001', problem: 'x', targetUser: 'y', sources: ['a'] }));
     expect(runProductTransition({ from: 'DISCOVERED', to: 'RESEARCHING', evidenceFile: file, approved: false, json: true })).toBe(0);
+  });
+
+  it('returns 2 when the evidence file contains JSON null, not a crash (Review Focus)', () => {
+    const file = path.join(dir, 'null-evidence.json');
+    writeFileSync(file, 'null');
+    expect(runProductTransition({ from: 'DISCOVERED', to: 'RESEARCHING', evidenceFile: file, approved: false, json: true })).toBe(2);
+  });
+
+  it('returns 2 when the evidence file contains a JSON array, not an object', () => {
+    const file = path.join(dir, 'array-evidence.json');
+    writeFileSync(file, '[]');
+    expect(runProductTransition({ from: 'DISCOVERED', to: 'RESEARCHING', evidenceFile: file, approved: false, json: true })).toBe(2);
+  });
+
+  it('returns 2 for an invalid --from state that is not a real ProductState (fix: runtime-validate, not just via types)', () => {
+    expect(runProductTransition({ from: 'NOT_A_STATE' as ProductState, to: 'RESEARCHING', approved: false, json: true })).toBe(2);
   });
 });

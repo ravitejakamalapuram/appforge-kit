@@ -1,11 +1,17 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
+import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
 const program = new Command();
 program.name('appforge').version('0.1.0');
+// Route commander's own usage/help/version handling through exceptions instead of a bare
+// process.exit(), so an invalid invocation still gets a cli-output@1-shaped error and the
+// exit code appforge validate/product-transition callers rely on (2 = invalid input), not
+// commander's default exit(1).
+program.exitOverride();
 
 program
   .command('validate')
@@ -34,4 +40,17 @@ program
     });
   });
 
-program.parseAsync(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (err) {
+  const commanderErr = err as CommanderError;
+  const exitCode = typeof commanderErr.exitCode === 'number' ? commanderErr.exitCode : 1;
+  // commander's own exitCode 0 covers --help/--version, which already printed what the user
+  // asked for; anything else is a usage error and belongs in our own exit-code table as 2.
+  if (exitCode === 0) {
+    process.exit(0);
+  }
+  const jsonRequested = process.argv.includes('--json');
+  printOutput(buildOutput('appforge', false, undefined, [commanderErr.message ?? 'invalid arguments']), jsonRequested);
+  process.exit(2);
+}

@@ -4,7 +4,9 @@
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "build": "pnpm -r build",
+    "pretest": "pnpm run build",
     "test": "vitest run",
+    "pretypecheck": "pnpm run build",
     "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {

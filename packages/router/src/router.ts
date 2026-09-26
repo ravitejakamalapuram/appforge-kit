@@ -29,13 +29,21 @@ export class TieredModelRouter implements ModelRouter {
       throw new Error(`Unknown complexity tier: "${request.complexity}"`);
     }
 
+    const highIndex = TIER_ORDER.indexOf('HIGH');
+    const criticalIndex = TIER_ORDER.indexOf('CRITICAL');
+    const riskFloorIndex = request.risk === 'high' ? highIndex : 0;
+
     if (request.risk === 'high') {
-      tierIndex = Math.max(tierIndex, TIER_ORDER.indexOf('HIGH'));
+      tierIndex = Math.max(tierIndex, highIndex);
     }
 
-    if (request.budgetRemainingPct < BUDGET_DOWNGRADE_THRESHOLD_PCT) {
+    // Budget pressure never downgrades CRITICAL (that tier exists precisely for stakes cost
+    // must not override — §7.1) and never drops a high-risk request below its risk floor
+    // (§7.2: "risk:high ⇒ tier ≥ HIGH" must hold even under budget pressure).
+    if (request.budgetRemainingPct < BUDGET_DOWNGRADE_THRESHOLD_PCT && tierIndex < criticalIndex) {
       const isCodeTask = this.config.codeTaskTypes.includes(request.taskType);
-      const floorIndex = isCodeTask ? TIER_ORDER.indexOf('NORMAL') : 0;
+      const codeFloorIndex = isCodeTask ? TIER_ORDER.indexOf('NORMAL') : 0;
+      const floorIndex = Math.max(codeFloorIndex, riskFloorIndex);
       tierIndex = Math.max(floorIndex, tierIndex - 1);
     }
 
