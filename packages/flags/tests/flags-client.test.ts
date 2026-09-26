@@ -99,4 +99,60 @@ describe('FlagsClient', () => {
 
     expect(flags).toEqual({ paywallEnabled: false, bannerText: 'only this changed' });
   });
+
+  it('ignores a remote field whose type does not match the default\'s type, keeping the default (fix: an untrusted edge cannot flip a boolean flag with a string)', async () => {
+    const fetcher = fetcherReturning({ paywallEnabled: 'yes' });
+    const cache = memoryCache();
+    const client = new FlagsClient(fetcher, cache, { edgeUrl: 'https://edge.example.com', product: 'demo', defaults: DEFAULTS });
+
+    const flags = await client.get();
+
+    expect(flags).toEqual(DEFAULTS);
+  });
+
+  it('drops a remote key that is not one of the declared defaults\' keys', async () => {
+    const fetcher = fetcherReturning({ paywallEnabled: true, someUnknownField: 'should not appear' });
+    const cache = memoryCache();
+    const client = new FlagsClient(fetcher, cache, { edgeUrl: 'https://edge.example.com', product: 'demo', defaults: DEFAULTS });
+
+    const flags = await client.get();
+
+    expect(flags).toEqual({ paywallEnabled: true, bannerText: 'default' });
+    expect(Object.keys(flags)).toEqual(['paywallEnabled', 'bannerText']);
+  });
+
+  it('cache.get() throwing is treated as a cache miss, not a hard failure (fix: a broken storage backend must not break flags entirely)', async () => {
+    const fetcher = fetcherReturning({ paywallEnabled: true });
+    const cache: FlagsCache = {
+      get: vi.fn(async () => { throw new Error('storage backend broken'); }),
+      set: vi.fn(async () => {}),
+    };
+    const client = new FlagsClient(fetcher, cache, { edgeUrl: 'https://edge.example.com', product: 'demo', defaults: DEFAULTS });
+
+    await expect(client.get()).resolves.toEqual({ paywallEnabled: true, bannerText: 'default' });
+  });
+
+  it('cache.set() throwing after a successful fetch still returns the freshly fetched value (fix: caching is best-effort, not required)', async () => {
+    const fetcher = fetcherReturning({ paywallEnabled: true });
+    const cache: FlagsCache = {
+      get: vi.fn(async () => undefined),
+      set: vi.fn(async () => { throw new Error('QUOTA_BYTES exceeded'); }),
+    };
+    const client = new FlagsClient(fetcher, cache, { edgeUrl: 'https://edge.example.com', product: 'demo', defaults: DEFAULTS });
+
+    await expect(client.get()).resolves.toEqual({ paywallEnabled: true, bannerText: 'default' });
+  });
+
+  it('characterizes (documents, does not fix) that a nested object default is replaced wholesale by a remote override, not deep-merged', async () => {
+    interface NestedFlags { theme: { color: string; size: string } }
+    const nestedDefaults: NestedFlags = { theme: { color: 'blue', size: 'md' } };
+    const fetcher = fetcherReturning({ theme: { color: 'red' } }); // omits "size"
+    const cache = memoryCache();
+    const client = new FlagsClient(fetcher, cache, { edgeUrl: 'https://edge.example.com', product: 'demo', defaults: nestedDefaults });
+
+    const flags = await client.get();
+
+    // "size" from the default is lost — this is the documented shallow-merge limitation, not a bug.
+    expect(flags).toEqual({ theme: { color: 'red' } });
+  });
 });
