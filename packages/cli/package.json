@@ -1,0 +1,14 @@
+{
+  "name": "@appforge/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "appforge": "./dist/index.js" },
+  "scripts": { "build": "tsc -p tsconfig.json && chmod +x dist/index.js" },
+  "dependencies": {
+    "@appforge/router": "workspace:*",
+    "@appforge/schemas": "workspace:*",
+    "commander": "^12.1.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.0.0" }
+}

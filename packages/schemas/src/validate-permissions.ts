@@ -1,4 +1,4 @@
-import Ajv2020 from 'ajv/dist/2020.js';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ErrorObject } from 'ajv';
 import permissionsSchema from '../schema/permissions.schema.json' with { type: 'json' };
 
