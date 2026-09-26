@@ -26,6 +26,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # `packages/e2e`'s postinstall only fetches the Chromium binary Playwright pins (`playwright
+      # install chromium`); it does not install the OS shared libraries Chromium needs to actually
+      # launch on a bare Linux runner (Playwright documents `install-deps` as required for that on
+      # Linux). ubuntu-latest usually has enough of them already, so relying on that silently would
+      # mean a runner-image change surfaces as an opaque launch failure instead of a clear step.
+      - run: pnpm --filter @appforge/e2e exec playwright install-deps chromium
+
       - run: pnpm typecheck
 
       - run: pnpm build

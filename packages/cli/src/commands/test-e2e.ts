@@ -13,7 +13,9 @@ export interface TestE2eOptions {
 /**
  * Exit codes: 0 ok (every check passed), 2 invalid input (the build step failed, or neither
  * --dist nor a successful build produced a directory containing manifest.json — see Review
- * Focus item 5), 9 one or more e2e checks failed.
+ * Focus item 5), 4 one or more e2e checks failed. (Final-review finding I2: the master plan's
+ * §29c table reserves exit 9 for "deterministic task" — the not-yet-built `route` command — so
+ * this uses the next free code, 4, not 9, to avoid colliding with that reserved meaning.)
  */
 export async function runTestE2e(opts: TestE2eOptions): Promise<number> {
   let distDir: string;
@@ -43,5 +45,5 @@ export async function runTestE2e(opts: TestE2eOptions): Promise<number> {
   const report = await runE2eSuite(distDir, {});
   const errors = report.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.error ?? 'failed'}`);
   printOutput(buildOutput('test', report.ok, report, errors), opts.json);
-  return report.ok ? 0 : 9;
+  return report.ok ? 0 : 4;
 }

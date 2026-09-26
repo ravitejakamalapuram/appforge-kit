@@ -75,7 +75,11 @@ program
       process.exitCode = 2;
       return;
     }
-    process.exitCode = await runTestE2e({ dir: opts.dir, dist: opts.dist, json: opts.json });
+    const code = await runTestE2e({ dir: opts.dir, dist: opts.dist, json: opts.json });
+    // Defense in depth against a leaked Playwright/Chromium handle keeping the event loop alive
+    // (see @appforge/e2e's launch.ts docstring — a launch failure closes its own browser context,
+    // but an explicit exit here means a future leak fails fast instead of hanging the CI job).
+    process.exit(code);
   });
 
 try {

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, cpSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { launchExtension } from '../src/launch.js';
 import type { LaunchedExtension } from '../src/launch.js';
 import { checkSmoke } from '../src/checks/smoke.js';
@@ -33,4 +36,24 @@ describe('checkSmoke', () => {
       await page.close();
     }
   });
+
+  it('REJECTS on a real unrelated console error (final-review finding I3: the previous test only proved page isolation, not that checkSmoke can fail)', async () => {
+    const brokenDir = mkdtempSync(path.join(tmpdir(), 'appforge-e2e-broken-smoke-'));
+    let brokenExt: LaunchedExtension | undefined;
+    try {
+      cpSync(CHROME_VANILLA_DIST, brokenDir, { recursive: true });
+      const htmlPath = path.join(brokenDir, 'src/newtab/index.html');
+      const html = readFileSync(htmlPath, 'utf8');
+      // A 404'd script reference is a real "broken asset" failure mode, distinct from the known
+      // placeholder edge-URL host this check is meant to ignore -- Chromium logs it the same way
+      // (a type:'error' console message, not a JS-level console.error() call).
+      writeFileSync(htmlPath, html.replace('<head>', '<head>\n    <script src="/this-script-does-not-exist.js"></script>'));
+
+      brokenExt = await launchExtension(brokenDir);
+      await expect(checkSmoke(brokenExt)).rejects.toThrow(/unexpected console error/);
+    } finally {
+      await brokenExt?.close();
+      rmSync(brokenDir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

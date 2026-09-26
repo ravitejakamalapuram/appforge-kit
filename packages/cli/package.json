@@ -2,7 +2,7 @@
   "name": "@appforge/cli",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "appforge": "./dist/index.js" },
+  "bin": { "appforge": "./bin/appforge.js" },
   "scripts": { "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js" },
   "dependencies": {
     "@appforge/e2e": "workspace:*",
