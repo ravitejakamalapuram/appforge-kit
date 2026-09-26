@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://appforge.dev/schema/permissions.schema.json",
+  "type": "object",
+  "required": ["schema", "permissions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "appforge/permissions@1" },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["permission", "required", "reason", "data_access", "security_impact"],
+        "additionalProperties": false,
+        "properties": {
+          "permission": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" },
+          "reason": { "type": "string", "minLength": 1 },
+          "data_access": { "type": "array", "items": { "type": "string" } },
+          "security_impact": { "enum": ["low", "medium", "high"] }
+        }
+      }
+    }
+  }
+}
