@@ -81,3 +81,23 @@ describe('appforge security permissions (nested subcommand wiring)', () => {
     expect(code).toBe(6);
   });
 });
+
+describe('appforge security csp (nested subcommand wiring)', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-csp-binary-')); });
+  afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it('exits 0 for a manifest with a strict CSP', () => {
+    const manifest = path.join(dir, 'manifest-ok.json');
+    writeFileSync(manifest, JSON.stringify({ content_security_policy: { extension_pages: "script-src 'self'" } }));
+    const { code } = run(['security', 'csp', '--manifest', manifest]);
+    expect(code).toBe(0);
+  });
+
+  it('exits 7, via the real nested "security csp" subcommand, for unsafe-eval', () => {
+    const manifest = path.join(dir, 'manifest-bad.json');
+    writeFileSync(manifest, JSON.stringify({ content_security_policy: { extension_pages: "script-src 'unsafe-eval'" } }));
+    const { code } = run(['security', 'csp', '--manifest', manifest]);
+    expect(code).toBe(7);
+  });
+});

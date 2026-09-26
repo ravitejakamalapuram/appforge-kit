@@ -3,6 +3,7 @@ import { Command, CommanderError } from 'commander';
 import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
 import { runSecurityPermissions } from './commands/security-permissions.js';
+import { runSecurityCsp } from './commands/security-csp.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -59,6 +60,15 @@ security
       previousManifestFile: opts.previousManifest,
       json: opts.json,
     });
+  });
+
+security
+  .command('csp')
+  .description('Check the built manifest.json for unsafe CSP directives and remote script references')
+  .requiredOption('--manifest <path>', 'path to the built manifest.json')
+  .option('--json', 'machine-readable output', false)
+  .action((opts: { manifest: string; json: boolean }) => {
+    process.exitCode = runSecurityCsp({ manifestFile: opts.manifest, json: opts.json });
   });
 
 try {
