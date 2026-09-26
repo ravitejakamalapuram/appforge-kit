@@ -1,0 +1,7 @@
+schema: appforge/permissions@1
+permissions:
+  - permission: storage
+    required: true
+    reason: "Persist the user's theme choice locally via @appforge/storage"
+    data_access: [user_settings_local]
+    security_impact: low

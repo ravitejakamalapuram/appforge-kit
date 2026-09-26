@@ -1,0 +1,26 @@
+# Template placeholder — `appforge create chrome --ui react <name>` (not yet built) would fill
+# these in for a real product. Kept here so this template can dogfood `appforge validate` and
+# `appforge security permissions` against its own build output.
+product_id: chrome-react-template
+name: AppForge Chrome Template (React)
+description: "A Manifest V3 template with a real popup + options UI (React), demonstrating @appforge/{storage,messaging,errors,flags}."
+platform: [chrome]
+state: DESIGNING
+portfolio_state: NEW
+repository: ravitejakamalapuram/appforge-kit
+owner: founder
+team: []
+permissions: .appforge/permissions.yaml
+data_collection:
+  collected: []
+  stored:
+    local: [chrome_storage_local_theme_setting]
+    remote: []
+  transmitted:
+    endpoints: [] # the flags demo points at a placeholder edgeUrl that does not resolve to anything real yet
+  sensitive: []
+  third_party: []
+  retention: { local: indefinite_until_user_clears, remote: none }
+  deletion: "Uninstall clears all local storage"
+security_classification: low
+current_version: "0.1.0"
