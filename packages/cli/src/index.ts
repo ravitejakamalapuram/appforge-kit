@@ -4,6 +4,7 @@ import { runValidate } from './commands/validate.js';
 import { runProductTransition } from './commands/product-transition.js';
 import { runSecurityPermissions } from './commands/security-permissions.js';
 import { runSecurityCsp } from './commands/security-csp.js';
+import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -69,6 +70,16 @@ security
   .option('--json', 'machine-readable output', false)
   .action((opts: { manifest: string; json: boolean }) => {
     process.exitCode = runSecurityCsp({ manifestFile: opts.manifest, json: opts.json });
+  });
+
+security
+  .command('bundle-size')
+  .description('Fail if the built dist/ directory (excluding source maps) exceeds a byte budget')
+  .requiredOption('--dist <path>', 'path to the built dist directory')
+  .requiredOption('--max-kb <number>', 'maximum allowed total size in KB, excluding *.map files')
+  .option('--json', 'machine-readable output', false)
+  .action((opts: { dist: string; maxKb: string; json: boolean }) => {
+    process.exitCode = runSecurityBundleSize({ distDir: opts.dist, maxKb: Number(opts.maxKb), json: opts.json });
   });
 
 try {
