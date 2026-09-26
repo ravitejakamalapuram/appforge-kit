@@ -6,11 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "appforge-edge-db"
-database_id = "REPLACE_AFTER_WRANGLER_D1_CREATE"
+database_id = "43930ae4-96ed-482f-8432-d64967c408dd"
 
 [vars]
 APPFORGE_ENV = "dev"
-# Placeholder until `wrangler secret put INGEST_ADMIN_TOKEN` is run before any real ingest
-# traffic (Task 6) — fine for local dev and for the Miniflare-simulated tests in this plan,
-# which never touch a real Cloudflare account.
-INGEST_ADMIN_TOKEN = "dev-only-placeholder-token"
+# INGEST_ADMIN_TOKEN is deliberately NOT a [vars] entry: Cloudflare refuses to let the same
+# binding name be both a plaintext var (re-pushed on every `wrangler deploy`) and a secret
+# (`wrangler secret put`) — see Task 6. Its local/test value lives in .dev.vars instead
+# (gitignored), which wrangler dev and @cloudflare/vitest-pool-workers both load automatically.
+# The real deployed Worker's value is a `wrangler secret put`-managed secret.
