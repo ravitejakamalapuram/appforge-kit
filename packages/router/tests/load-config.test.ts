@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parse as parseYaml } from 'yaml';
-import { loadTierConfigs, loadDeterministicTaskTypes, TieredModelRouter } from '../src/index.js';
+import { loadTierConfigs, loadDeterministicTaskTypes, TieredModelRouter, type ModelsYamlDoc } from '../src/index.js';
 
 const MODELS_YAML = `
 tiers:
@@ -57,7 +57,9 @@ describe('loadTierConfigs', () => {
         HIGH: { provider: 'a', model: 'b', max_tokens: 1, timeout_s: 1 },
         CRITICAL: { inherit: 'ULTRA' },
       },
-    };
+      // The fixture is deliberately invalid (an inherit target outside the real Complexity
+      // union) to exercise the runtime error path; there is no well-typed way to express that.
+    } as unknown as ModelsYamlDoc;
     expect(() => loadTierConfigs(doc)).toThrow(/unknown tier "ULTRA"/);
   });
 
@@ -84,6 +86,6 @@ describe('loadDeterministicTaskTypes', () => {
   });
 
   it('returns an empty array when the field is absent', () => {
-    expect(loadDeterministicTaskTypes({ tiers: {} })).toEqual([]);
+    expect(loadDeterministicTaskTypes({})).toEqual([]);
   });
 });
