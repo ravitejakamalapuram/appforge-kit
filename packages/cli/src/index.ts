@@ -8,6 +8,7 @@ import { runSecurityCsp } from './commands/security-csp.js';
 import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { runMetricsShow } from './commands/metrics-show.js';
 import { runMetricsPnl } from './commands/metrics-pnl.js';
+import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -111,6 +112,18 @@ metrics
   .option('--json', 'machine-readable output', false)
   .action((opts: { product: string; since: string; fixture: string; json: boolean }) => {
     process.exitCode = runMetricsPnl(opts);
+  });
+
+metrics
+  .command('anomalies')
+  .description('Run a deterministic trailing z-score anomaly check over a product\'s metric series')
+  .requiredOption('--product <id>', 'product id')
+  .option('--name <metric>', 'check only this metric name (default: every series returned for the product)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string; name?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
+    process.exitCode = await runMetricsAnomalies(opts);
   });
 
 program
