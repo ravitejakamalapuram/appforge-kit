@@ -9,8 +9,14 @@ import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { runMetricsShow } from './commands/metrics-show.js';
 import { runMetricsPnl } from './commands/metrics-pnl.js';
 import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
+import { runReportDaily } from './commands/report-daily.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
+
+/** Commander accumulator for repeatable options (e.g. `--product` on `appforge report *`). */
+function collect(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}
 
 const program = new Command();
 program.name('appforge').version('0.1.0');
@@ -124,6 +130,23 @@ metrics
   .option('--json', 'machine-readable output', false)
   .action(async (opts: { product: string; name?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
     process.exitCode = await runMetricsAnomalies(opts);
+  });
+
+const report = program.command('report').description('Generate founder reports (§29b) from edge metrics/P&L data');
+
+report
+  .command('daily')
+  .description(
+    'Deterministic daily founder report (COMPANY HEALTH / WINNERS / RISKS / INCIDENTS / NEW OPPORTUNITIES / PRODUCTS TO SCALE-PAUSE / FOUNDER DECISIONS REQUIRED)'
+  )
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .option('--since <date>', 'only include P&L rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; since?: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
+    process.exitCode = await runReportDaily(opts);
   });
 
 program

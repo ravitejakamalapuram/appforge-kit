@@ -1,0 +1,10 @@
+{
+  "revenue": [
+    { "id": "r1", "product_id": "json-workbench", "provider": "gumroad", "gross_cents": 1000, "fee_cents": 90, "refund_cents": 0, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-09-05" },
+    { "id": "r2", "product_id": "json-workbench", "provider": "gumroad", "gross_cents": 500, "fee_cents": 45, "refund_cents": 500, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-09-12" }
+  ],
+  "costs": [
+    { "id": "c1", "product_id": "json-workbench", "category": "ai", "amount_cents": 120, "occurred_at": "2026-09-01" },
+    { "id": "c2", "product_id": "json-workbench", "category": "infra", "amount_cents": 25, "occurred_at": "2026-09-01" }
+  ]
+}
