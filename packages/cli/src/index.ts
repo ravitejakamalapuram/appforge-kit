@@ -6,6 +6,7 @@ import { runSecurityPermissions } from './commands/security-permissions.js';
 import { runTestE2e } from './commands/test-e2e.js';
 import { runSecurityCsp } from './commands/security-csp.js';
 import { runSecurityBundleSize } from './commands/security-bundle-size.js';
+import { runMetricsShow } from './commands/metrics-show.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -81,6 +82,21 @@ security
   .option('--json', 'machine-readable output', false)
   .action((opts: { dist: string; maxKb: string; json: boolean }) => {
     process.exitCode = runSecurityBundleSize({ distDir: opts.dist, maxKb: Number(opts.maxKb), json: opts.json });
+  });
+
+const metrics = program.command('metrics').description('Query/compute product metrics via the edge admin API');
+
+metrics
+  .command('show')
+  .description('Fetch metrics rows for a product from GET /v1/metrics')
+  .requiredOption('--product <id>', 'product id')
+  .option('--name <metric>', 'filter to a single metric name')
+  .option('--since <date>', 'only rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string; name?: string; since?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
+    process.exitCode = await runMetricsShow(opts);
   });
 
 program
