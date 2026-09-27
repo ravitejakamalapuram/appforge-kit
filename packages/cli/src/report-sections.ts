@@ -1,4 +1,5 @@
-import type { ReportData, ProductReportData, ReportAnomaly } from './report-data.js';
+import { computePnl } from '@appforge/schemas';
+import type { ReportData, ProductReportData, ReportAnomaly, PnlFixtureRows } from './report-data.js';
 
 /** "no data" for null (a genuinely-missing data source) — never a fabricated "$0.00". */
 export function formatCents(cents: number | null): string {
@@ -80,6 +81,34 @@ export function renderDailyReportText(sections: DailyReportSections): string {
     lines.push(`(note: no P&L data available for: ${sections.productsMissingPnl.join(', ')})`);
   }
   return lines.join('\n');
+}
+
+export interface TrendPoint {
+  date: string;
+  contributionCents: number;
+}
+
+/**
+ * Buckets the requested products' matching --pnl-fixture rows by calendar date (occurred_at's
+ * date portion) and runs computePnl per day, for the §29b "contribution (30d, trend)" dashboard
+ * panel. Returns [] (not a fabricated flat line) when there is no --pnl-fixture at all, or none of
+ * its rows match these products/since.
+ */
+export function computeContributionTrend(pnlRows: PnlFixtureRows | undefined, products: string[], since?: string): TrendPoint[] {
+  if (!pnlRows) return [];
+  const productSet = new Set(products);
+  const revenue = pnlRows.revenue.filter((r) => productSet.has(r.product_id) && (!since || r.occurred_at >= since));
+  const costs = pnlRows.costs.filter((c) => c.product_id !== undefined && productSet.has(c.product_id) && (!since || c.occurred_at >= since));
+
+  const dates = new Set<string>();
+  for (const r of revenue) dates.add(r.occurred_at.slice(0, 10));
+  for (const c of costs) dates.add(c.occurred_at.slice(0, 10));
+
+  return [...dates].sort().map((date) => {
+    const dayRevenue = revenue.filter((r) => r.occurred_at.slice(0, 10) === date);
+    const dayCosts = costs.filter((c) => c.occurred_at.slice(0, 10) === date);
+    return { date, contributionCents: computePnl(dayRevenue, dayCosts).contributionCents };
+  });
 }
 
 export interface WeeklyProductRow {

@@ -6,6 +6,7 @@ import {
   renderDailyReportText,
   buildWeeklyReportSections,
   renderWeeklyReportText,
+  computeContributionTrend,
 } from '../src/report-sections.js';
 import type { ReportData, ProductReportData, ReportAnomaly } from '../src/report-data.js';
 
@@ -125,5 +126,22 @@ describe('buildWeeklyReportSections / renderWeeklyReportText', () => {
     expect(text).toContain('EXPERIMENTS');
     expect(text).toContain('no data (experiment tracking not wired up yet)');
     expect(text).toContain('NEXT WEEK PRIORITIES');
+  });
+});
+
+describe('computeContributionTrend', () => {
+  it('returns [] when no --pnl-fixture is given (Review Focus: no fabricated flat line)', () => {
+    expect(computeContributionTrend(undefined, ['p1'])).toEqual([]);
+  });
+
+  it('buckets by date and computes contribution per day for the requested products only', () => {
+    const pnlRows = {
+      revenue: [
+        { id: 'r1', product_id: 'p1', provider: 'gumroad', gross_cents: 1000, fee_cents: 0, refund_cents: 0, tax_cents: 0, currency: 'usd', occurred_at: '2026-09-05' },
+        { id: 'r2', product_id: 'other', provider: 'gumroad', gross_cents: 9999, fee_cents: 0, refund_cents: 0, tax_cents: 0, currency: 'usd', occurred_at: '2026-09-05' },
+      ],
+      costs: [{ id: 'c1', product_id: 'p1', category: 'ai' as const, amount_cents: 100, occurred_at: '2026-09-05' }],
+    };
+    expect(computeContributionTrend(pnlRows, ['p1'])).toEqual([{ date: '2026-09-05', contributionCents: 900 }]);
   });
 });
