@@ -11,6 +11,7 @@ import { runMetricsPnl } from './commands/metrics-pnl.js';
 import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
 import { runReportDaily } from './commands/report-daily.js';
 import { runReportWeekly } from './commands/report-weekly.js';
+import { runReportDashboard } from './commands/report-dashboard.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -161,6 +162,21 @@ report
   .option('--json', 'machine-readable output', false)
   .action(async (opts: { product: string[]; since: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
     process.exitCode = await runReportWeekly(opts);
+  });
+
+report
+  .command('dashboard')
+  .description('Generate a static HTML founder dashboard page (§29b) from edge metrics/P&L data')
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .requiredOption('--out <path>', 'output HTML file path')
+  .option('--since <date>', 'only include P&L rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--ai-budget-cents <cents>', 'AI spend budget for the period, in cents', '10000')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; out: string; since?: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; aiBudgetCents: string; json: boolean }) => {
+    process.exitCode = await runReportDashboard({ ...opts, aiBudgetCents: Number(opts.aiBudgetCents) });
   });
 
 program
