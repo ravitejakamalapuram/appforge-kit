@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runMetricsAnomalies } from '../src/commands/metrics-anomalies.js';
 import type { EdgeFetcher, MetricRow } from '../src/edge-client.js';
 
@@ -17,9 +17,35 @@ function dailyRows(product: string, name: string, values: number[], startDate = 
 
 const BASE_OPTS = { product: 'json-workbench', edgeUrl: 'https://edge.example.com', edgeToken: 'dev-only-placeholder-token', json: true };
 
+
+// Isolate every test from the developer's ambient shell: if APPFORGE_EDGE_URL/APPFORGE_EDGE_TOKEN
+// were exported (e.g. pointing at the real deployed edge worker), a test that omits the fetcher
+// would otherwise fall through to the global fetch and send real traffic to production.
+const EDGE_ENV_VARS = ['APPFORGE_EDGE_URL', 'APPFORGE_EDGE_TOKEN'] as const;
+const savedEdgeEnv: Record<string, string | undefined> = {};
+beforeEach(() => {
+  for (const key of EDGE_ENV_VARS) {
+    savedEdgeEnv[key] = process.env[key];
+    delete process.env[key];
+  }
+});
+afterEach(() => {
+  for (const key of EDGE_ENV_VARS) {
+    if (savedEdgeEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEdgeEnv[key];
+  }
+});
+
+/** For tests that must fail before any request: fails the test loudly if a request is attempted. */
+const neverCalledFetcher: EdgeFetcher = {
+  fetch: async (url) => {
+    throw new Error(`unexpected edge request to ${url}`);
+  },
+};
+
 describe('runMetricsAnomalies', () => {
   it('returns 2 when neither --edge-url nor APPFORGE_EDGE_URL is set', async () => {
-    const code = await runMetricsAnomalies({ product: 'json-workbench', json: true });
+    const code = await runMetricsAnomalies({ product: 'json-workbench', json: true }, { fetcher: neverCalledFetcher });
     expect(code).toBe(2);
   });
 
