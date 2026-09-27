@@ -4,6 +4,8 @@ import {
   buildScalePauseRecommendations,
   buildDailyReportSections,
   renderDailyReportText,
+  buildWeeklyReportSections,
+  renderWeeklyReportText,
 } from '../src/report-sections.js';
 import type { ReportData, ProductReportData, ReportAnomaly } from '../src/report-data.js';
 
@@ -91,5 +93,37 @@ describe('buildDailyReportSections / renderDailyReportText', () => {
     const text = renderDailyReportText(buildDailyReportSections({ products: [], portfolioPnl: null }));
     expect(text).toMatch(/WINNERS\s+no anomalies detected/);
     expect(text).toMatch(/RISKS\s+no anomalies detected/);
+  });
+});
+
+describe('buildWeeklyReportSections / renderWeeklyReportText', () => {
+  it('builds a portfolio row per product using the latest wau/retention metric values, "no data" when a metric name is absent', () => {
+    const data: ReportData = {
+      products: [
+        product({ product: 'p1', latestByMetric: { wau: { date: '2026-09-07', value: 120 } }, pnl: { grossRevenueCents: 1000, refundsCents: 0, paymentFeesCents: 0, netRevenueCents: 1000, aiCostCents: 100, infrastructureCents: 0, marketingCents: 0, supportCents: 0, otherVariableCents: 0, contributionCents: 900, contributionMargin: 0.9 } }),
+      ],
+      portfolioPnl: null,
+    };
+    const sections = buildWeeklyReportSections(data, '2026-09-01');
+    expect(sections.portfolio).toEqual([
+      { product: 'p1', wau: 120, d7Retention: null, d30Retention: null, revenueCents: 1000, contributionCents: 900 },
+    ]);
+  });
+
+  it('caps nextWeekPriorities at 5, prioritizing scale/pause recommendations then top risks', () => {
+    const products: ProductReportData[] = Array.from({ length: 7 }, (_, i) => product({
+      product: `p${i}`,
+      anomalies: [{ product: `p${i}`, name: 'wau', date: '2026-09-07', value: 1, trailingMean: 10, trailingStdDev: 1, zScore: 9, direction: 'down' }],
+    }));
+    const sections = buildWeeklyReportSections({ products, portfolioPnl: null }, '2026-09-01');
+    expect(sections.nextWeekPriorities.length).toBeLessThanOrEqual(5);
+  });
+
+  it('renders the weekly template sections including empty-state notes for unwired data sources', () => {
+    const text = renderWeeklyReportText(buildWeeklyReportSections({ products: [], portfolioPnl: null }, '2026-09-01'));
+    expect(text).toContain('PORTFOLIO PERFORMANCE');
+    expect(text).toContain('EXPERIMENTS');
+    expect(text).toContain('no data (experiment tracking not wired up yet)');
+    expect(text).toContain('NEXT WEEK PRIORITIES');
   });
 });
