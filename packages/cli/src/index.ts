@@ -7,6 +7,7 @@ import { runTestE2e } from './commands/test-e2e.js';
 import { runSecurityCsp } from './commands/security-csp.js';
 import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { runMetricsShow } from './commands/metrics-show.js';
+import { runMetricsPnl } from './commands/metrics-pnl.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -97,6 +98,19 @@ metrics
   .option('--json', 'machine-readable output', false)
   .action(async (opts: { product: string; name?: string; since?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
     process.exitCode = await runMetricsShow(opts);
+  });
+
+metrics
+  .command('pnl')
+  .description(
+    'Compute the §21.1 P&L line-item table for a product/period from a --fixture JSON file of Revenue/Cost rows (interim input until P1-15 wires up real D1 ingestion)'
+  )
+  .requiredOption('--product <id>', 'product id')
+  .requiredOption('--since <date>', 'period start date (YYYY-MM-DD, inclusive)')
+  .requiredOption('--fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] }')
+  .option('--json', 'machine-readable output', false)
+  .action((opts: { product: string; since: string; fixture: string; json: boolean }) => {
+    process.exitCode = runMetricsPnl(opts);
   });
 
 program
