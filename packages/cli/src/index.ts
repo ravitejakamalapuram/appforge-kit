@@ -9,8 +9,16 @@ import { runSecurityBundleSize } from './commands/security-bundle-size.js';
 import { runMetricsShow } from './commands/metrics-show.js';
 import { runMetricsPnl } from './commands/metrics-pnl.js';
 import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
+import { runReportDaily } from './commands/report-daily.js';
+import { runReportWeekly } from './commands/report-weekly.js';
+import { runReportDashboard } from './commands/report-dashboard.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
+
+/** Commander accumulator for repeatable options (e.g. `--product` on `appforge report *`). */
+function collect(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}
 
 const program = new Command();
 program.name('appforge').version('0.1.0');
@@ -124,6 +132,51 @@ metrics
   .option('--json', 'machine-readable output', false)
   .action(async (opts: { product: string; name?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
     process.exitCode = await runMetricsAnomalies(opts);
+  });
+
+const report = program.command('report').description('Generate founder reports (§29b) from edge metrics/P&L data');
+
+report
+  .command('daily')
+  .description(
+    'Deterministic daily founder report (COMPANY HEALTH / WINNERS / RISKS / INCIDENTS / NEW OPPORTUNITIES / PRODUCTS TO SCALE-PAUSE / FOUNDER DECISIONS REQUIRED)'
+  )
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .option('--since <date>', 'only include P&L rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; since?: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
+    process.exitCode = await runReportDaily(opts);
+  });
+
+report
+  .command('weekly')
+  .description('Weekly board report: per-product portfolio table, costs, growth/risk signals, next-week priorities (§29b)')
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .requiredOption('--since <date>', 'period start date (YYYY-MM-DD, inclusive)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; since: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
+    process.exitCode = await runReportWeekly(opts);
+  });
+
+report
+  .command('dashboard')
+  .description('Generate a static HTML founder dashboard page (§29b) from edge metrics/P&L data')
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .requiredOption('--out <path>', 'output HTML file path')
+  .option('--since <date>', 'only include P&L rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--ai-budget-cents <cents>', 'AI spend budget for the period, in cents', '10000')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; out: string; since?: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; aiBudgetCents: string; json: boolean }) => {
+    process.exitCode = await runReportDashboard({ ...opts, aiBudgetCents: Number(opts.aiBudgetCents) });
   });
 
 program
