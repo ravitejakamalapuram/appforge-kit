@@ -1,0 +1,16 @@
+{
+  "revenue": [
+    { "id": "r1", "product_id": "json-workbench", "provider": "gumroad", "gross_cents": 1000, "fee_cents": 90, "refund_cents": 0, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-09-05" },
+    { "id": "r2", "product_id": "json-workbench", "provider": "gumroad", "gross_cents": 500, "fee_cents": 45, "refund_cents": 500, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-09-12" },
+    { "id": "r3", "product_id": "json-workbench", "provider": "gumroad", "gross_cents": 2000, "fee_cents": 180, "refund_cents": 0, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-08-15" },
+    { "id": "r4", "product_id": "other-product", "provider": "gumroad", "gross_cents": 9999, "fee_cents": 900, "refund_cents": 0, "tax_cents": 0, "currency": "usd", "occurred_at": "2026-09-10" }
+  ],
+  "costs": [
+    { "id": "c1", "product_id": "json-workbench", "category": "ai", "amount_cents": 120, "occurred_at": "2026-09-01" },
+    { "id": "c2", "product_id": "json-workbench", "category": "ai", "amount_cents": 30, "occurred_at": "2026-09-15" },
+    { "id": "c3", "product_id": "json-workbench", "category": "infra", "amount_cents": 25, "occurred_at": "2026-09-01" },
+    { "id": "c4", "product_id": "json-workbench", "category": "support", "amount_cents": 200, "occurred_at": "2026-09-20" },
+    { "id": "c5", "product_id": "json-workbench", "category": "other", "amount_cents": 10, "occurred_at": "2026-09-01" },
+    { "id": "c6", "category": "ai", "amount_cents": 500, "occurred_at": "2026-09-01", "ref": "shared portfolio run, no product_id" }
+  ]
+}

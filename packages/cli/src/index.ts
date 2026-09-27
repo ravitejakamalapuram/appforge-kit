@@ -6,6 +6,9 @@ import { runSecurityPermissions } from './commands/security-permissions.js';
 import { runTestE2e } from './commands/test-e2e.js';
 import { runSecurityCsp } from './commands/security-csp.js';
 import { runSecurityBundleSize } from './commands/security-bundle-size.js';
+import { runMetricsShow } from './commands/metrics-show.js';
+import { runMetricsPnl } from './commands/metrics-pnl.js';
+import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -81,6 +84,46 @@ security
   .option('--json', 'machine-readable output', false)
   .action((opts: { dist: string; maxKb: string; json: boolean }) => {
     process.exitCode = runSecurityBundleSize({ distDir: opts.dist, maxKb: Number(opts.maxKb), json: opts.json });
+  });
+
+const metrics = program.command('metrics').description('Query/compute product metrics via the edge admin API');
+
+metrics
+  .command('show')
+  .description('Fetch metrics rows for a product from GET /v1/metrics')
+  .requiredOption('--product <id>', 'product id')
+  .option('--name <metric>', 'filter to a single metric name')
+  .option('--since <date>', 'only rows on/after this date (YYYY-MM-DD)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string; name?: string; since?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
+    process.exitCode = await runMetricsShow(opts);
+  });
+
+metrics
+  .command('pnl')
+  .description(
+    'Compute the §21.1 P&L line-item table for a product/period from a --fixture JSON file of Revenue/Cost rows (interim input until P1-15 wires up real D1 ingestion)'
+  )
+  .requiredOption('--product <id>', 'product id')
+  .requiredOption('--since <date>', 'period start date (YYYY-MM-DD, inclusive)')
+  .requiredOption('--fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] }')
+  .option('--json', 'machine-readable output', false)
+  .action((opts: { product: string; since: string; fixture: string; json: boolean }) => {
+    process.exitCode = runMetricsPnl(opts);
+  });
+
+metrics
+  .command('anomalies')
+  .description('Run a deterministic trailing z-score anomaly check over a product\'s metric series')
+  .requiredOption('--product <id>', 'product id')
+  .option('--name <metric>', 'check only this metric name (default: every series returned for the product)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string; name?: string; edgeUrl?: string; edgeToken?: string; json: boolean }) => {
+    process.exitCode = await runMetricsAnomalies(opts);
   });
 
 program
