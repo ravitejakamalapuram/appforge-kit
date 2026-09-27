@@ -10,6 +10,7 @@ import { runMetricsShow } from './commands/metrics-show.js';
 import { runMetricsPnl } from './commands/metrics-pnl.js';
 import { runMetricsAnomalies } from './commands/metrics-anomalies.js';
 import { runReportDaily } from './commands/report-daily.js';
+import { runReportWeekly } from './commands/report-weekly.js';
 import { buildOutput, printOutput } from './output.js';
 import type { ProductState } from '@appforge/schemas';
 
@@ -147,6 +148,19 @@ report
   .option('--json', 'machine-readable output', false)
   .action(async (opts: { product: string[]; since?: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
     process.exitCode = await runReportDaily(opts);
+  });
+
+report
+  .command('weekly')
+  .description('Weekly board report: per-product portfolio table, costs, growth/risk signals, next-week priorities (§29b)')
+  .option('--product <id>', 'product id (repeatable)', collect, [] as string[])
+  .requiredOption('--since <date>', 'period start date (YYYY-MM-DD, inclusive)')
+  .option('--edge-url <url>', 'edge base URL (falls back to APPFORGE_EDGE_URL)')
+  .option('--edge-token <token>', 'edge bearer token (falls back to APPFORGE_EDGE_TOKEN)')
+  .option('--pnl-fixture <path>', 'path to a JSON file: { revenue: Revenue[], costs: Cost[] } (interim input until P1-15)')
+  .option('--json', 'machine-readable output', false)
+  .action(async (opts: { product: string[]; since: string; edgeUrl?: string; edgeToken?: string; pnlFixture?: string; json: boolean }) => {
+    process.exitCode = await runReportWeekly(opts);
   });
 
 program
