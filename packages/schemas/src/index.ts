@@ -5,3 +5,4 @@ export * from './manifest-permissions.js';
 export * from './csp-check.js';
 export * from './bundle-size.js';
 export * from './pnl.js';
+export * from './anomaly-detection.js';
