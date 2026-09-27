@@ -1,7 +1,9 @@
 import { EdgeClient, EdgeRequestError, type EdgeFetcher, type MetricRow } from './edge-client.js';
 import { computePnl, detectAnomalies, type Revenue, type Cost, type PnlResult } from '@appforge/schemas';
+import type { PnlFixtureRows } from './pnl-fixture.js';
 
 export { EdgeRequestError };
+export type { PnlFixtureRows };
 
 export interface ReportAnomaly {
   product: string;
@@ -24,11 +26,6 @@ export interface ProductReportData {
 export interface ReportData {
   products: ProductReportData[];
   portfolioPnl: PnlResult | null;
-}
-
-export interface PnlFixtureRows {
-  revenue: Revenue[];
-  costs: Cost[];
 }
 
 export interface GatherReportDataOptions {

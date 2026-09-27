@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { gatherReportData, EdgeRequestError, type PnlFixtureRows } from '../report-data.js';
+import { loadPnlFixture } from '../pnl-fixture.js';
 import { buildDailyReportSections, renderDailyReportText } from '../report-sections.js';
 import type { EdgeFetcher } from '../edge-client.js';
 import { buildOutput, printOutput } from '../output.js';
@@ -15,25 +15,6 @@ export interface ReportDailyOptions {
 
 export interface ReportDailyDeps {
   fetcher?: EdgeFetcher;
-}
-
-function isPnlFixture(value: unknown): value is PnlFixtureRows {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return Array.isArray(v.revenue) && Array.isArray(v.costs);
-}
-
-function loadPnlFixture(filePath: string): { ok: true; rows: PnlFixtureRows } | { ok: false; error: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    return { ok: false, error: `cannot read/parse ${filePath}: ${(err as Error).message}` };
-  }
-  if (!isPnlFixture(parsed)) {
-    return { ok: false, error: `${filePath} must contain { revenue: Revenue[], costs: Cost[] }` };
-  }
-  return { ok: true, rows: parsed };
 }
 
 /**
@@ -67,7 +48,7 @@ export async function runReportDaily(opts: ReportDailyOptions, deps: ReportDaily
   if (opts.pnlFixture) {
     const loaded = loadPnlFixture(opts.pnlFixture);
     if (!loaded.ok) {
-      printOutput(buildOutput('report daily', false, undefined, [loaded.error]), opts.json);
+      printOutput(buildOutput('report daily', false, undefined, loaded.errors), opts.json);
       return 2;
     }
     pnlRows = loaded.rows;

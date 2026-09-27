@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,5 +61,17 @@ describe('runReportDashboard', () => {
       { fetcher: emptyFetcher(), now: FIXED_NOW }
     );
     expect(code).toBe(2);
+  });
+
+  it('returns 2 for a --pnl-fixture with a string amount_cents instead of reporting a string-concatenated cost as ok:true (Critical finding regression)', async () => {
+    const bad = path.join(dir, 'bad-amount.json');
+    writeFileSync(bad, JSON.stringify({ revenue: [], costs: [{ id: 'c1', product_id: 'json-workbench', category: 'ai', amount_cents: '120', occurred_at: '2026-09-01' }] }));
+    const out = path.join(dir, 'c.html');
+    const code = await runReportDashboard(
+      { ...EDGE, product: ['json-workbench'], pnlFixture: bad, out, aiBudgetCents: 10000, json: true },
+      { fetcher: emptyFetcher(), now: FIXED_NOW }
+    );
+    expect(code).toBe(2);
+    expect(existsSync(out)).toBe(false);
   });
 });

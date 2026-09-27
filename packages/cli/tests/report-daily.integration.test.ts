@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { runReportDaily } from '../src/commands/report-daily.js';
 import type { EdgeFetcher } from '../src/edge-client.js';
 
@@ -80,5 +82,17 @@ describe('runReportDaily', () => {
     process.env.APPFORGE_EDGE_TOKEN = 'dev-only-placeholder-token';
     const code = await runReportDaily({ product: ['json-workbench'], json: true }, { fetcher: emptyFetcher() });
     expect(code).toBe(0);
+  });
+
+  it('returns 2 for a --pnl-fixture with a string amount_cents instead of reporting a string-concatenated cost as ok:true (Critical finding regression)', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-report-daily-badfixture-'));
+    try {
+      const bad = path.join(dir, 'bad.json');
+      writeFileSync(bad, JSON.stringify({ revenue: [], costs: [{ id: 'c1', product_id: 'json-workbench', category: 'ai', amount_cents: '120', occurred_at: '2026-09-01' }] }));
+      const code = await runReportDaily({ ...BASE, pnlFixture: bad }, { fetcher: emptyFetcher() });
+      expect(code).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
