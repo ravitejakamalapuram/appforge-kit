@@ -1,0 +1,144 @@
+name: notify-paperclip
+
+# Reusable workflow (P1-03 — see .claude/appforge-ai-master-plan.md §4.4 and §12). Notifies the
+# locally-running Paperclip instance over its Cloudflare Tunnel webhook ingress when something
+# happens in a product repo's own CI (PR opened/ready, CI failed, release finished), so Paperclip
+# creates/updates an issue and wakes the right agent — without needing a public IP or open port on
+# the founder's Mac.
+#
+# Design notes:
+#   - Transport: §4.4 originally defaulted to GitHub Actions -> Tailscale -> localhost; the founder
+#     chose the Cloudflare Tunnel fallback instead (settled decision, not revisited here). The
+#     tunnel's public hostname resolves to `cloudflared` running on the founder's Mac, which proxies
+#     only Paperclip's webhook path to 127.0.0.1:3100 — see
+#     appforge-control/infra/cloudflare-tunnel/config.yml for the ingress scoping.
+#   - Signing: the Paperclip routine trigger is configured with signingMode "github_hmac" — the
+#     same convention GitHub/Sentry use for their own outgoing webhooks: HMAC-SHA256 of the *raw*
+#     request body, hex-encoded, sent as `X-Hub-Signature-256: sha256=<hex>` (verified server-side in
+#     @paperclipai/server's `firePublicTrigger`; see also `paperclipai routine trigger:create
+#     --payload-json '{"kind":"webhook","signingMode":"github_hmac"}'`). No timestamp header is
+#     needed for this mode (unlike Paperclip's other, timestamped hmac_sha256 signing mode) — replay
+#     protection instead comes from the Idempotency-Key below plus the tunnel's narrow scope.
+#   - Idempotency: Paperclip dedupes routine runs on (routineId, triggerId, source, Idempotency-Key)
+#     — firing the same key twice coalesces into the existing run instead of creating a second
+#     issue. Callers should pass a stable `idempotency-key` (e.g.
+#     "<repo>:<event>:<pr-number-or-sha>") so CI retries/re-runs never double-notify. If omitted,
+#     this workflow falls back to "<repo>:<event>:<run_id>", which is unique per *run* but not per
+#     logical event — fine for one-off signals (e.g. release finished), not for events that can
+#     legitimately fire more than once per run.
+#   - Ingress scope: the Cloudflare Tunnel is restricted (see
+#     appforge-control/infra/cloudflare-tunnel/config.yml) to exactly this routine's
+#     `/api/routine-triggers/public/<publicId>/fire` path — it cannot reach any other Paperclip API
+#     route or the dashboard. Both the publicId (embedded in the webhook URL) and the HMAC secret
+#     are credentials: they live only in GitHub Actions secrets (repo or environment scope) and in
+#     appforge-control/secrets/ (gitignored), never committed to any repo.
+#
+# A caller repo adds a job like:
+#   jobs:
+#     notify-paperclip:
+#       needs: [build-and-test]
+#       if: always()
+#       uses: ravitejakamalapuram/appforge-kit/.github/workflows/notify-paperclip.yml@main
+#       with:
+#         event: ci_failed
+#         product: json-workbench
+#         idempotency-key: json-workbench:ci_failed:${{ github.sha }}
+#         details-json: |
+#           {"failedJob": "build-and-test", "conclusion": "${{ needs.build-and-test.result }}"}
+#       secrets:
+#         paperclip-webhook-url: ${{ secrets.PAPERCLIP_WEBHOOK_URL }}
+#         paperclip-webhook-secret: ${{ secrets.PAPERCLIP_WEBHOOK_SECRET }}
+
+on:
+  workflow_call:
+    inputs:
+      event:
+        description: "What happened, e.g. pr_opened | pr_ready_for_review | ci_failed | release_finished. Free-form string read by the receiving Paperclip agent (CTO/QA/etc per §12's routing table) — not enum-validated here so new event types don't require an appforge-kit change."
+        required: true
+        type: string
+      product:
+        description: "Product/repo short name, matching its Paperclip project shortname (e.g. json-workbench)"
+        required: true
+        type: string
+      idempotency-key:
+        description: "Stable dedupe key sent as the Idempotency-Key header. Defaults to '<repo>:<event>:<run_id>' if not given — pass an explicit one (e.g. including the PR number or commit sha) so retries of the same logical event coalesce instead of creating a second issue."
+        required: false
+        type: string
+        default: ""
+      details-json:
+        description: "Extra JSON object merged into the webhook payload's `details` field (e.g. PR number/URL, failed job name, release tag). Must be a valid JSON object literal, e.g. '{\"prNumber\": 42}'."
+        required: false
+        type: string
+        default: "{}"
+    secrets:
+      paperclip-webhook-url:
+        description: "Full public webhook URL for the Paperclip routine trigger (Cloudflare Tunnel hostname + /api/routine-triggers/public/<publicId>/fire). Not itself ultra-sensitive (the HMAC secret is what actually authorizes the call) but still kept out of source since the publicId is part of it."
+        required: true
+      paperclip-webhook-secret:
+        description: "HMAC secret shared with the Paperclip routine's github_hmac webhook trigger. Rotate via `paperclipai routine trigger:rotate-secret <triggerId>` and update this secret in every caller repo/environment at the same time."
+        required: true
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Build and sign the payload, then POST to Paperclip
+        env:
+          PAPERCLIP_WEBHOOK_URL: ${{ secrets.paperclip-webhook-url }}
+          PAPERCLIP_WEBHOOK_SECRET: ${{ secrets.paperclip-webhook-secret }}
+          EVENT: ${{ inputs.event }}
+          PRODUCT: ${{ inputs.product }}
+          IDEMPOTENCY_KEY: ${{ inputs.idempotency-key }}
+          DETAILS_JSON: ${{ inputs.details-json }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "$DETAILS_JSON" | jq -e . >/dev/null 2>&1; then
+            echo "::error::details-json is not valid JSON: $DETAILS_JSON"
+            exit 1
+          fi
+
+          key="$IDEMPOTENCY_KEY"
+          if [ -z "$key" ]; then
+            key="${REPO}:${EVENT}:${RUN_ID}"
+          fi
+
+          payload=$(jq -n \
+            --arg event "$EVENT" \
+            --arg product "$PRODUCT" \
+            --arg repo "$REPO" \
+            --arg ref "$REF" \
+            --arg sha "$SHA" \
+            --arg actor "$ACTOR" \
+            --arg runUrl "$RUN_URL" \
+            --argjson details "$DETAILS_JSON" \
+            '{event: $event, product: $product, repo: $repo, ref: $ref, sha: $sha, actor: $actor, runUrl: $runUrl, details: $details}')
+
+          # github_hmac mode verifies HMAC-SHA256(secret, raw_body) — sign the exact bytes we send.
+          signature="sha256=$(printf '%s' "$payload" | openssl dgst -sha256 -hmac "$PAPERCLIP_WEBHOOK_SECRET" | sed 's/^.* //')"
+
+          http_status=$(curl -sS -o /tmp/paperclip-response.json -w '%{http_code}' \
+            --max-time 15 \
+            -X POST "$PAPERCLIP_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $signature" \
+            -H "Idempotency-Key: $key" \
+            --data "$payload")
+
+          echo "Paperclip webhook responded $http_status:"
+          cat /tmp/paperclip-response.json || true
+          echo
+
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            echo "::error::Paperclip webhook call failed with HTTP $http_status"
+            exit 1
+          fi
