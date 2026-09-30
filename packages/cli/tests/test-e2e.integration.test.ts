@@ -33,6 +33,37 @@ describe('runTestE2e', () => {
     }
   });
 
+  it('reports a runtime-gap error (not a build failure) when no package manager is on PATH — regardless of whether pnpm is installed here (APP-195)', () => {
+    const buildDir = mkdtempSync(path.join(tmpdir(), 'appforge-cli-test-e2e-no-pm-'));
+    const binPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/index.js');
+    try {
+      writeFileSync(
+        path.join(buildDir, 'package.json'),
+        JSON.stringify({ name: 'fixture', version: '0.0.0', scripts: { build: 'node -e "process.exit(1)"' } })
+      );
+
+      // Strip PATH down to nothing so neither pnpm nor npm resolves, simulating the agent
+      // runtime gap this ticket is about without depending on the host's actual toolchain.
+      let error: { status: number | null; stdout: Buffer } | undefined;
+      try {
+        execFileSync(process.execPath, [binPath, 'test', '--e2e', '--dir', buildDir, '--json'], {
+          env: { ...process.env, PATH: '' },
+          timeout: 10_000,
+        });
+      } catch (err) {
+        error = err as { status: number | null; stdout: Buffer };
+      }
+
+      expect(error).toBeDefined();
+      expect(error!.status).toBe(2);
+      const output = JSON.parse(error!.stdout.toString());
+      expect(output.errors.join(' ')).toMatch(/package manager/i);
+      expect(output.errors.join(' ')).not.toMatch(/build failed/i);
+    } finally {
+      rmSync(buildDir, { recursive: true, force: true });
+    }
+  });
+
   it('runs the real e2e suite against the built chrome-vanilla template and returns 0 (the one real, unmocked CLI-to-browser run)', async () => {
     expect(await runTestE2e({ dir: '.', dist: CHROME_VANILLA_DIST, json: true })).toBe(0);
   }, 30_000);
