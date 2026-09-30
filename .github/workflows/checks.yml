@@ -340,6 +340,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # gitleaks-action lists the PR's commits (GET /pulls/N/commits) to scan only what changed.
+      # On a PRIVATE repo that call needs pull-requests: read; without it the job dies with
+      # "Resource not accessible by integration" (403). Public repos are unaffected, which hid this.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v6
         with:
